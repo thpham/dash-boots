@@ -5,7 +5,7 @@ import { createAudio } from './audio/audio';
 
 // Note: wasm pkg import path will be wired up in a later task.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import initWasm, { GameHandle, game_tick } from '../wasm/pkg/snes_wasm';
+import initWasm, { GameHandle, game_tick, game_load_level } from '../wasm/pkg/snes_wasm';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('Missing #game canvas');
@@ -39,24 +39,20 @@ function installAudioUnlockListeners() {
 }
 installAudioUnlockListeners();
 
-loadLevel('/levels/level1.json')
-  .then((level) => {
-    console.log('level loaded', level);
-  })
-  .catch((err) => {
-    console.error('failed to load level', err);
-  });
 
 async function main() {
   await initWasm();
 
   const game = new GameHandle();
 
-  function raf() {
-  const state = input.poll();
+  const level = await loadLevel('/levels/level1.json');
+  game_load_level(game, level as any);
 
-  renderer.resizeToDisplaySize();
-  const frame = game_tick(game, state as any);
+  function raf() {
+    const state = input.poll();
+
+    renderer.resizeToDisplaySize();
+    const frame = game_tick(game, state as any);
     for (const sfx of frame.sfx) audio.playSfx(sfx);
     renderer.render(frame);
 
