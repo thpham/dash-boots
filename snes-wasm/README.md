@@ -17,6 +17,11 @@ just serve      # production build, then http://localhost:4173
 including under a sub-path (relative asset URLs). It must be served over HTTP
 (`file://` cannot load the WASM).
 
+A published copy also lives on GitHub Pages at
+https://thpham.github.io/dash-boots/. The `.github/workflows/deploy-pages.yml`
+workflow republishes it on pushed `v*` tags (`git tag v0.1.1 && git push
+--tags`) and on manual runs via workflow_dispatch on the Actions tab.
+
 ### Controls
 
 | Action | Keyboard | Gamepad (standard mapping) |

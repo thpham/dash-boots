@@ -1,0 +1,70 @@
+# Publish the production build to GitHub Pages.
+#
+# Runs on pushed version tags (v*) and by hand via workflow_dispatch.
+# The build runs inside the flake's devShell, so CI uses the exact same
+# toolchain as local development (same rustc, wasm-bindgen-cli, node).
+# Result: https://thpham.github.io/dash-boots/ — Vite uses relative asset
+# URLs (base: './') so the sub-path serving of project Pages works as-is.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix (Determinate)
+        uses: DeterminateSystems/nix-installer-action@v23
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('snes-wasm/package-lock.json') }}
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            snes-wasm/wasm/target
+          key: cargo-pages-${{ runner.os }}-${{ hashFiles('snes-wasm/wasm/Cargo.lock') }}
+
+      - name: Build static site inside the flake devShell (wasm-pack + vite)
+        run: nix develop -c just build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: snes-wasm/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
