@@ -21,6 +21,8 @@ export class Executor {
   private canvasH = VIEW_H;
   /** True once the 3D passes are created successfully (Task 9). */
   futureReady = false;
+  /** Called once if the future renderer throws at render time (spec §9). */
+  onFutureLost: (() => void) | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
@@ -126,6 +128,17 @@ export class Executor {
   }
 
   protected renderFuture(f: FrameData): { color: WebGLTexture; bloom: WebGLTexture } {
-    return this.future ? this.future.render(f) : { color: this.black, bloom: this.black };
+    if (!this.future) return { color: this.black, bloom: this.black };
+    try {
+      return this.future.render(f);
+    } catch (err) {
+      // The game must never crash because of the effect (spec §9): drop the
+      // future renderer and stay in the past; the rAF loop keeps running.
+      console.warn('Future rendering failed, staying in the past:', err);
+      this.future = null;
+      this.futureReady = false;
+      this.onFutureLost?.();
+      return { color: this.black, bloom: this.black };
+    }
   }
 }

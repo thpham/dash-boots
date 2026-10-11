@@ -54,6 +54,8 @@ async function main() {
   TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
   const size = (id: number) => sizes[TEXTURES.findIndex((t) => t.id === id)];
   game.set_future_supported(executor.enableFuture([size(2).w, size(2).h], [size(3).w, size(3).h]));
+  // If the future renderer throws at render time, fall back to the past world.
+  executor.onFutureLost = () => game.set_future_supported(false);
 
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   game.set_reduced_motion(motion.matches);
