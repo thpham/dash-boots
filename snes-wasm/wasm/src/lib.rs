@@ -21,6 +21,7 @@ pub mod world {
     pub mod particles;
     pub mod physics;
     pub mod player;
+    pub mod shift;
 }
 
 pub use tuning::{Tuning, TUNING};
