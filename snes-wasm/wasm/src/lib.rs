@@ -3,9 +3,51 @@
 //! only provides input bits, frame time, textures, a GL context and audio.
 
 pub mod audio;
+pub mod c_heap;
 pub mod game;
 pub mod input;
 pub mod math;
+pub mod music;
+
+/// Campaign music rendered in-wasm by the tracker (stereo interleaved f32,
+/// 22050 Hz, peak-normalized). One buffer per track, rendered on demand.
+#[wasm_bindgen]
+pub fn render_music(id: u8) -> Vec<f32> {
+    music::render_music(id)
+}
+
+/// Incremental music render (the host pumps it between frames so the game
+/// keeps painting; a whole-track render can take seconds of simulation).
+#[wasm_bindgen]
+pub struct MusicRenderTask {
+    task: music::tracker::MusicRenderTask,
+}
+
+#[wasm_bindgen]
+impl MusicRenderTask {
+    #[wasm_bindgen(constructor)]
+    pub fn new(id: u8) -> Result<MusicRenderTask, JsError> {
+        Ok(Self { task: music::tracker::MusicRenderTask::new(id) })
+    }
+
+    /// Advance up to `chunks` internal steps; `true` = done, `take` is ready.
+    /// Each step is sub-millisecond work by design.
+    pub fn step(&mut self, chunks: u32) -> bool {
+        self.task.step(chunks as usize)
+    }
+
+    /// The rendered buffer, normalized; consumes the task (final call).
+    pub fn take(self) -> Vec<f32> {
+        self.task.take()
+    }
+}
+
+/// SFX synthesized in-wasm from the ported Python recipes (stereo duplicated,
+/// 22050 Hz, peak-normalized).
+#[wasm_bindgen]
+pub fn render_sfx(id: u8) -> Vec<f32> {
+    music::render_sfx(id)
+}
 pub mod render;
 pub mod sprites;
 pub mod tiled;

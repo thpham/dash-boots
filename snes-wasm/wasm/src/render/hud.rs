@@ -46,13 +46,14 @@ fn draw_title(g: &Game, r: &mut RenderList) {
     if (g.frame / 30).is_multiple_of(2) {
         r.text_centered(84.0, "PRESS ENTER OR SPACE", WHITE, 1.0);
     }
-    let panel_y = 106.0;
-    r.rect(24.0, panel_y - 4.0, vw - 48.0, 66.0, [0.0, 0.0, 0.0, 0.45]);
+    let panel_y = 100.0;
+    r.rect(24.0, panel_y - 4.0, vw - 48.0, 78.0, [0.0, 0.0, 0.0, 0.45]);
     let lines = [
         "ARROWS/WASD   MOVE",
         "SPACE/K/Z     JUMP (HOLD = HIGHER)",
         "SHIFT/J/X     RUN  (+ DASH W/ BOOTS)",
         "DOWN/S        CROUCH / SLIDE",
+        "G/H  MUSIC VOL    V/B  SFX VOL",
         "ENTER  PAUSE   M  MUTE   C  CRT",
     ];
     for (i, l) in lines.iter().enumerate() {

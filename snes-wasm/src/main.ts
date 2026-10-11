@@ -1,8 +1,8 @@
 // Browser host. All game logic, level parsing and render-list building live in
 // the Rust/WASM core; this file only wires the platform: assets, input, GL, audio.
 
-import initWasm, { GameHandle, music_names, sfx_names } from '../wasm/pkg/snes_wasm';
-import { createAudio } from './platform/audio';
+import initWasm, { GameHandle, render_sfx } from '../wasm/pkg/snes_wasm';
+import { createAudio, VOLUME_STEP } from './platform/audio';
 import { Executor, type TextureSpec } from './platform/gl/executor';
 import { createInput } from './platform/input';
 import { FutureCap } from './platform/perf';
@@ -93,6 +93,18 @@ function showError(message: string) {
   }
 }
 
+/** Transient feedback (volume keys, mute): fades out on its own. */
+let toastTimer: number | undefined;
+
+function showToast(text: string) {
+  const el = document.querySelector<HTMLElement>('#toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove('show'), 1400);
+}
+
 async function main() {
   const canvas = document.querySelector<HTMLCanvasElement>('#game');
   if (!canvas) throw new Error('Missing #game canvas');
@@ -120,7 +132,7 @@ async function main() {
     const files = texturesFor(theme);
     const text = await fetchText(levelUrl(index, name));
     const handle = new GameHandle(text, VIEW_W, VIEW_H);
-    if (index >= 0) handle.set_music(index); // music stem audio/music/level<N>.wav
+    if (index >= 0) handle.set_music(index); // in-wasm track id (rendered lazily by audio.ts)
     handle.set_last_level(index < 0 || index === LEVELS.length - 1);
     const sizes = await executor.loadTextures(files);
     files.forEach((f, i) => handle.set_texture_size(f.id, sizes[i].w, sizes[i].h));
@@ -143,7 +155,7 @@ async function main() {
   const [tileSize, spriteSize] = [boot.sizes[2], boot.sizes[3]];
   game.set_future_supported(executor.enableFuture([tileSize.w, tileSize.h], [spriteSize.w, spriteSize.h]));
 
-  const audio = createAudio(BASE, sfx_names(), music_names());
+  const audio = createAudio({ sfx: render_sfx });
   const input = createInput();
 
   // Clear screen done: the sim emitted LEVEL_CLEAR. Advance (or replay on the
@@ -175,8 +187,20 @@ async function main() {
   window.addEventListener('keydown', unlock);
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', (e) => {
+    // G/H shifts the music volume, V/B the effects — plain letter keys (no
+    // shift combos), and the same physical positions on AZERTY and QWERTY.
+    // Key repeat is allowed here: holding the key ramps the volume.
+    if (e.code === 'KeyG' || e.code === 'KeyH') {
+      const vol = audio.adjustMusic(e.code === 'KeyH' ? VOLUME_STEP : -VOLUME_STEP);
+      showToast(`Music ${Math.round(vol * 100)}%`);
+    } else if (e.code === 'KeyV' || e.code === 'KeyB') {
+      const vol = audio.adjustSfx(e.code === 'KeyB' ? VOLUME_STEP : -VOLUME_STEP);
+      showToast(`Effects ${Math.round(vol * 100)}%`);
+    }
     if (e.repeat) return;
-    if (e.code === 'KeyM') audio.toggleMute();
+    if (e.code === 'KeyM') {
+      showToast(audio.toggleMute() ? 'Muted' : 'Sound on');
+    }
     if (e.code === 'KeyC') {
       crt = !crt;
       game?.set_crt_enabled(crt);

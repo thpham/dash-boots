@@ -28,7 +28,7 @@ pub enum Sfx {
     Return,
 }
 
-/// File stems, indexed by `Sfx as usize` (`audio/sfx/<name>.wav`).
+/// SFX stem names, indexed by `Sfx as usize` (synthesized, not fetched).
 pub const SFX_NAMES: [&str; 13] = [
     "jump",
     "dash",
@@ -45,7 +45,7 @@ pub const SFX_NAMES: [&str; 13] = [
     "return",
 ];
 
-/// File stems, indexed by music id (`audio/music/<name>.wav`).
+/// Music track display names, indexed by music id (rendered in-wasm).
 pub const MUSIC_NAMES: [&str; 4] = ["level1", "level2", "level3", "level4"];
 
 pub const MUSIC_PLAY_BASE: u8 = 64;

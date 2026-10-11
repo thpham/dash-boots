@@ -45,6 +45,10 @@ try {
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   });
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+  const audioRequests: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/audio/')) audioRequests.push(r.url());
+  });
   const problems: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') problems.push(`${m.type()}: ${m.text()}`);
@@ -54,6 +58,10 @@ try {
   await page.goto(URL);
   await page.waitForSelector('#game:not([hidden])', { timeout: 10_000 });
   await sleep(500);
+  check(
+    audioRequests.length === 0,
+    `audio must be synthesized, not fetched${audioRequests.length ? `: ${audioRequests.join(', ')}` : ''}`,
+  );
   const canvas = page.locator('#game');
   const shot = (name: string) => canvas.screenshot({ path: `${OUT}/${name}.png` });
 
@@ -62,6 +70,17 @@ try {
   check(dims[2] === dims[0] && dims[3] === dims[1], 'CSS size matches device pixels at dpr 1');
 
   const title = await shot('01-title');
+
+  // Volume keys: G/H for the music, V/B for the SFX (plain letter keys — no
+  // shift combos). The toast is the observable feedback (WebAudio gains are
+  // not exposed to the DOM).
+  await page.keyboard.press('KeyG');
+  await page.waitForSelector('#toast.show', { timeout: 2_000 });
+  check(/Music \d+%/.test(await page.locator('#toast').textContent() ?? ''), 'G/H adjusts the music volume (toast feedback)');
+  await page.keyboard.press('KeyB');
+  await page.waitForFunction(() => /Effects \d+%/.test(document.querySelector('#toast')?.textContent ?? ''), { timeout: 2_000 });
+  check(true, 'V/B adjusts the SFX volume (no shift)');
+
   await page.keyboard.press('Enter');
   await sleep(300);
   const start = await shot('02-playing');

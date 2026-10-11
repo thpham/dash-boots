@@ -1,4 +1,8 @@
 // WebAudio host: plays the cues emitted by the WASM core (see wasm/src/audio.rs).
+// Music is rendered incrementally by a wasm MusicRenderTask pumped on a timer —
+// never synchronously (a whole-track render is seconds of CPU; review Critical 1).
+
+import { MusicRenderTask } from '../../wasm/pkg/snes_wasm';
 
 const MUSIC_PLAY_BASE = 64;
 const MUSIC_FUTURE_ON = 251;
@@ -7,8 +11,33 @@ const MUSIC_PAUSE = 253;
 const MUSIC_RESUME = 254;
 const MUSIC_STOP = 255;
 
-const MUSIC_VOLUME = 0.45;
-const SFX_VOLUME = 0.7;
+const MUSIC_VOLUME = 0.85;
+const SFX_VOLUME = 0.2;
+/** -/+ key step, matched in main.ts. */
+export const VOLUME_STEP = 0.05;
+const VOLUME_KEY = 'dash-boots-volume';
+
+type Volumes = { music: number; sfx: number };
+
+/** Persisted so a refresh keeps the levels the player settled on. */
+function loadVolumes(): Volumes {
+  try {
+    const raw = JSON.parse(localStorage.getItem(VOLUME_KEY) ?? '') as Partial<Volumes>;
+    if (
+      typeof raw.music === 'number' &&
+      typeof raw.sfx === 'number' &&
+      raw.music >= 0 &&
+      raw.music <= 1 &&
+      raw.sfx >= 0 &&
+      raw.sfx <= 1
+    ) {
+      return { music: raw.music, sfx: raw.sfx };
+    }
+  } catch {
+    // Storage unavailable: defaults.
+  }
+  return { music: MUSIC_VOLUME, sfx: SFX_VOLUME };
+}
 
 export type AudioHost = {
   /** Call from a user gesture: browsers keep audio suspended until then. */
@@ -16,7 +45,31 @@ export type AudioHost = {
   handle(codes: Uint8Array): void;
   /** Returns true when now muted. */
   toggleMute(): boolean;
+  /** Shifts the music bus volume by `delta` (clamped 0..1). New value back. */
+  adjustMusic(delta: number): number;
+  /** Same for the effects bus. */
+  adjustSfx(delta: number): number;
 };
+
+/** Rendered in-wasm (see wasm/src/music/): stereo interleaved f32, 22050 Hz. */
+export type AudioRenderer = {
+  sfx(id: number): Float32Array;
+};
+
+const MUSIC_SR = 22050;
+
+/** Stereo interleaved samples -> native AudioBuffer 22050 Hz (browser resamples). */
+function toBuffer(ctx: AudioContext, raw: Float32Array): AudioBuffer {
+  const frames = Math.floor(raw.length / 2);
+  const buf = ctx.createBuffer(2, frames, MUSIC_SR);
+  const l = buf.getChannelData(0);
+  const r = buf.getChannelData(1);
+  for (let i = 0; i < frames; i++) {
+    l[i] = raw[2 * i];
+    r[i] = raw[2 * i + 1];
+  }
+  return buf;
+}
 
 /** Stereo exponentially decaying noise: a cheap, deterministic hall reverb. */
 function impulseResponse(ctx: AudioContext, seconds: number): AudioBuffer {
@@ -33,21 +86,22 @@ function impulseResponse(ctx: AudioContext, seconds: number): AudioBuffer {
   return buf;
 }
 
-export function createAudio(baseUrl: string, sfxNames: string[], musicNames: string[]): AudioHost {
+export function createAudio(render: AudioRenderer): AudioHost {
   const Ctx =
     window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) {
     console.warn('WebAudio not supported: running silent');
-    return { unlock() {}, handle() {}, toggleMute: () => true };
+    return { unlock() {}, handle() {}, toggleMute: () => true, adjustMusic: () => MUSIC_VOLUME, adjustSfx: () => SFX_VOLUME };
   }
 
   // Created early (suspended) so assets decode while the title screen shows.
   const ctx = new Ctx();
+  const volumes = loadVolumes();
   const master = ctx.createGain();
   const musicBus = ctx.createGain();
   const sfxBus = ctx.createGain();
-  musicBus.gain.value = MUSIC_VOLUME;
-  sfxBus.gain.value = SFX_VOLUME;
+  musicBus.gain.value = volumes.music;
+  sfxBus.gain.value = volumes.sfx;
   // Future: the same song "heard through the present" (low-pass + wide reverb).
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
@@ -77,19 +131,8 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
   const sfx = new Map<number, AudioBuffer>();
   const music = new Map<number, AudioBuffer>();
 
-  async function load(url: string): Promise<AudioBuffer | null> {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await ctx.decodeAudioData(await res.arrayBuffer());
-    } catch (err) {
-      console.warn(`audio: failed to load ${url}`, err);
-      return null;
-    }
-  }
-
-  // Music state: the track that *should* play, so a cue that arrives before
-  // decoding finishes (or while paused) is honoured later.
+  // Music state: the track that *should* play, so a cue that arrives while a
+  // lazy render is pending (or while paused) is honoured later.
   let wanted: number | null = null;
   let paused = false;
   let source: AudioBufferSourceNode | null = null;
@@ -111,7 +154,10 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
     stopSource();
     if (wanted === null || paused) return;
     const buf = music.get(wanted);
-    if (!buf) return;
+    if (!buf) {
+      beginRender(wanted);
+      return;
+    }
     source = ctx.createBufferSource();
     source.buffer = buf;
     source.loop = true;
@@ -121,16 +167,64 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
     source.start(0, at);
   }
 
-  sfxNames.forEach((name, id) => {
-    void load(`${baseUrl}audio/sfx/${name}.wav`).then((b) => b && sfx.set(id, b));
-  });
-  musicNames.forEach((name, id) => {
-    void load(`${baseUrl}audio/music/${name}.wav`).then((b) => {
-      if (!b) return;
-      music.set(id, b);
-      if (wanted === id && !source) startMusic();
-    });
-  });
+  /** In-flight renders, keyed by track id (one task per track at a time). */
+  const rendering = new Map<number, MusicRenderTask>();
+  /** Per-tick stepping budget (ms): a step is <1 ms of simulation, so the
+   * game's rAF keeps painting while a multi-second render drains. */
+  const PUMP_BUDGET_MS = 4;
+
+  function beginRender(id: number) {
+    if (rendering.has(id) || music.has(id)) return;
+    let task: MusicRenderTask;
+    try {
+      task = new MusicRenderTask(id);
+    } catch (err) {
+      console.warn('audio: music render failed', id, err);
+      return;
+    }
+    rendering.set(id, task);
+    const pump = () => {
+      // superseded by a stop/other task: leave it to GC via free().
+      if (rendering.get(id) !== task) {
+        task.free();
+        return;
+      }
+      const deadline = performance.now() + PUMP_BUDGET_MS;
+      let done = false;
+      while (!done && performance.now() < deadline) {
+        done = task.step(4);
+      }
+      if (!done) {
+        setTimeout(pump, 4);
+        return;
+      }
+      rendering.delete(id);
+      let buf: AudioBuffer;
+      try {
+        // take() consumes the task: wasm-bindgen frees it on this side of
+        // the call, so no manual free() afterwards.
+        buf = toBuffer(ctx, task.take());
+      } catch (err) {
+        console.warn('audio: music render failed', id, err);
+        task.free();
+        return;
+      }
+      music.set(id, buf);
+      // render finished while the cue is still wanted: honour it (like the
+      // former async fetch did).
+      if (wanted === id && !paused) startMusic();
+    };
+    setTimeout(pump, 4);
+  }
+
+  // SFX: rendered once at boot (short, synchronous, deterministic).
+  for (let id = 0; id < 13; id++) {
+    try {
+      sfx.set(id, toBuffer(ctx, render.sfx(id)));
+    } catch (err) {
+      console.warn(`audio: sfx render failed for ${id}`, err);
+    }
+  }
 
   function playSfx(id: number) {
     const buf = sfx.get(id);
@@ -175,5 +269,25 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
       master.gain.value = mute ? 0 : 1;
       return mute;
     },
+    adjustMusic(delta) {
+      return adjust('music', delta);
+    },
+    adjustSfx(delta) {
+      return adjust('sfx', delta);
+    },
   };
+
+  function adjust(which: 'music' | 'sfx', delta: number): number {
+    const cur = which === 'music' ? musicBus.gain.value : sfxBus.gain.value;
+    const next = Math.min(1, Math.max(0, cur + delta));
+    if (which === 'music') musicBus.gain.value = next;
+    else sfxBus.gain.value = next;
+    volumes[which] = next;
+    try {
+      localStorage.setItem(VOLUME_KEY, JSON.stringify(volumes));
+    } catch {
+      // Persistence unavailable: the level simply lasts this session.
+    }
+    return next;
+  }
 }

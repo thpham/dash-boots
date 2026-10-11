@@ -11,9 +11,9 @@ _default:
 install:
   cd {{web}} && [ -d node_modules ] || npm ci
 
-# Regenerate the original art and audio (stdlib-only Python)
+# Regenerate the original art (stdlib-only Python; audio is synthesized in the wasm)
 assets:
-  cd {{web}} && python3 tools/gen_art.py && python3 tools/gen_audio.py
+  cd {{web}} && python3 tools/gen_art.py
 
 # Regenerate public/levels/*.json (overwrites edits made in Tiled!)
 level:
@@ -23,7 +23,8 @@ level:
 wasm-build:
   cd {{crate}} && wasm-pack build --release --target web --out-dir pkg
 
-# Run Rust tests (physics, rules, Tiled parser, bot playthrough of levels 1-4)
+# Run Rust tests (physics, rules, Tiled parser, bot playthrough of levels 1-4;
+# the wasm crate carries the music engine)
 wasm-test:
   cd {{crate}} && cargo test
 

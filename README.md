@@ -4,8 +4,10 @@ An original 16-bit style platformer. The whole game simulation lives in Rust,
 compiled to WebAssembly; a thin TypeScript/Vite layer handles assets, input,
 WebGL2 and WebAudio.
 
-Four levels in three more themes (sunset, caverns, night), one chiptune per
-level, and the run saved in `localStorage` — a refresh resumes where you were.
+Four levels in three more themes (sunset, caverns, night), music played by an
+in-wasm tracker (libxm — demoscene .xm modules, attribution in
+`snes-wasm/README.md`), SFX synthesized in Rust, and the run saved in
+`localStorage` — a refresh resumes where you were.
 
 **Play online, free:** https://thpham.github.io/dash-boots/ — the site is built
 and published by GitHub Actions on `v*` tags (deploy-pages workflow).
