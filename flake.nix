@@ -15,7 +15,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             just
-            nodejs_20
+            nodejs_24
             cargo
             rustc
             rustfmt
