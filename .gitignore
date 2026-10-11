@@ -8,3 +8,6 @@ result-*
 
 # Agent working files (brainstorm mockups, task notes)
 .superpowers/
+
+# Design specs & plans kept locally, out of the repository history
+docs/superpowers/
