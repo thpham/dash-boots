@@ -81,6 +81,12 @@ async function main() {
     renderer.draw(
       new Float32Array(mem, game.vertices_ptr(), game.vertices_len()),
       new Uint32Array(mem, game.batches_ptr(), game.batches_len()),
+      true,
+    );
+    renderer.draw(
+      new Float32Array(mem, game.hud_vertices_ptr(), game.hud_vertices_len()),
+      new Uint32Array(mem, game.hud_batches_ptr(), game.hud_batches_len()),
+      false,
     );
     requestAnimationFrame(frame);
   };

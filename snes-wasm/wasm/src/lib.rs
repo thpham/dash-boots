@@ -48,7 +48,8 @@ pub fn music_names() -> Vec<String> {
 #[wasm_bindgen]
 pub struct GameHandle {
     game: game::Game,
-    render: render::RenderList,
+    retro: render::RenderList,
+    hud: render::RenderList,
     audio: Vec<u8>,
 }
 
@@ -61,13 +62,15 @@ impl GameHandle {
         let (w, h) = (view_w as f32, view_h as f32);
         Ok(GameHandle {
             game: game::Game::new(data, w, h),
-            render: render::RenderList::new(w, h),
+            retro: render::RenderList::new(w, h),
+            hud: render::RenderList::new(w, h),
             audio: Vec::new(),
         })
     }
 
     pub fn set_texture_size(&mut self, tex: u32, w: u32, h: u32) {
-        self.render.set_texture_size(tex, w as f32, h as f32);
+        self.retro.set_texture_size(tex, w as f32, h as f32);
+        self.hud.set_texture_size(tex, w as f32, h as f32);
     }
 
     /// Advance by `dt_ms` of wall time with the given held buttons (bitmask, see
@@ -75,26 +78,42 @@ impl GameHandle {
     pub fn frame(&mut self, buttons: u32, dt_ms: f32) -> u32 {
         let steps = self.game.advance(input::InputState::from_bits(buttons), dt_ms / 1000.0);
         self.audio.extend(self.game.drain_audio().into_iter().map(|e| e.code()));
-        render::draw_game(&self.game, &mut self.render);
+        render::draw_game(&self.game, &mut self.retro, &mut self.hud);
         steps
     }
 
     pub fn vertices_ptr(&self) -> *const f32 {
-        self.render.verts.as_ptr()
+        self.retro.verts.as_ptr()
     }
 
     /// Number of f32 values (vertex count × 8).
     pub fn vertices_len(&self) -> usize {
-        self.render.verts.len()
+        self.retro.verts.len()
     }
 
     pub fn batches_ptr(&self) -> *const u32 {
-        self.render.batches.as_ptr()
+        self.retro.batches.as_ptr()
     }
 
     /// Number of u32 values (batch count × 3).
     pub fn batches_len(&self) -> usize {
-        self.render.batches.len()
+        self.retro.batches.len()
+    }
+
+    pub fn hud_vertices_ptr(&self) -> *const f32 {
+        self.hud.verts.as_ptr()
+    }
+
+    pub fn hud_vertices_len(&self) -> usize {
+        self.hud.verts.len()
+    }
+
+    pub fn hud_batches_ptr(&self) -> *const u32 {
+        self.hud.batches.as_ptr()
+    }
+
+    pub fn hud_batches_len(&self) -> usize {
+        self.hud.batches.len()
     }
 
     /// Audio event codes since the last call.

@@ -1,5 +1,5 @@
 // WebGL2 host renderer: uploads the vertex buffer built by the WASM core and
-// issues one draw call per batch (layout documented in wasm/src/render.rs).
+// issues one draw call per batch (layout documented in wasm/src/render/mod.rs).
 
 const FLOATS_PER_VERTEX = 8;
 
@@ -125,10 +125,12 @@ export class Renderer {
     if (this.canvas.style.height !== h) this.canvas.style.height = h;
   }
 
-  draw(verts: Float32Array, batches: Uint32Array) {
+  draw(verts: Float32Array, batches: Uint32Array, clear: boolean) {
     const gl = this.gl;
-    gl.clearColor(0.23, 0.42, 0.85, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (clear) {
+      gl.clearColor(0.23, 0.42, 0.85, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
     if (verts.byteLength > this.vboBytes) {
       this.vboBytes = Math.max(verts.byteLength, this.vboBytes * 2);
