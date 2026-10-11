@@ -27,6 +27,7 @@ including under a sub-path (relative asset URLs). It must be served over HTTP
 | Crouch / slide (crawl in tunnels) | ↓ or S | D-pad down |
 | Start / pause | Enter, Esc, P | Start |
 | Mute | M | — |
+| CRT filter on/off | C | — |
 
 Gameplay: collect coins, stomp Grumbles, grab the **dash boots** (faster run, a
 dash burst that knocks enemies out, and they absorb one hit), slide through low
@@ -55,6 +56,8 @@ rAF dt (ms) ──────────────────────�
                                         world/       player, enemies, physics, camera, items, particles
 WebGL2: 1 draw call per batch ◄─────── render.rs    vertex buffer (parallax, tiles, sprites, HUD text)
 WebAudio buses ◄────────────────────── audio.rs     u8 cue stream (SFX ids, music play/pause/stop)
+WebGL2 passes: past RT, future RT, ◄── render/scene3d.rs, render/camera3d.rs, render/plan.rs
+  bloom, composite, HUD
 ```
 
 - The render list is read straight from WASM memory (`vertices_ptr/len`,
@@ -62,6 +65,20 @@ WebAudio buses ◄────────────────────�
 - Physics: AABB vs tiles, X then Y, sub-stepped (≤ 4 px) so nothing tunnels;
   coyote time, jump buffer, variable jump height, ledge assist and ceiling corner correction.
 - Determinism: the simulation only advances in fixed 1/60 s steps; long frames are clamped.
+
+## Past ↔ future ("Mémoire vive")
+
+Rifts (`rift` objects in Tiled) shift the world between the 16-bit past and a
+holographic 3D "reconstructed memory". The simulation stays 2D; only the
+presentation pivots (camera 3/4 rear, extruded glass blocks, bloom), then the
+past comes back pixelated, warm and CRT-filtered.
+
+- Level rule: the 6 columns right of a rift must be flat ground with no enemy spawn
+  (checked at load time).
+- `?level=test_rift` loads a tiny level with a rift right after the start.
+- Respects `prefers-reduced-motion` (simple crossfade) and lowers the future
+  resolution automatically on slow GPUs. If 3D setup fails, the game stays in the past.
+- Design: `docs/superpowers/specs/2026-10-11-time-shift-engine-design.md`.
 
 ## Assets & level
 

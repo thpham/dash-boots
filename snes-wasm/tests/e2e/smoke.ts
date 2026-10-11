@@ -84,6 +84,39 @@ try {
   const paused2 = await shot('05-paused-later');
   check(paused1.equals(paused2), 'pause freezes the frame');
 
+  // C toggles the CRT filter: still paused, so only the filter can change the frame.
+  await page.keyboard.press('c');
+  await sleep(200);
+  const crtToggled = await shot('06-crt-toggled');
+  check(!paused2.equals(crtToggled), 'C toggles the CRT filter in the past');
+  await page.keyboard.press('c');
+  await sleep(200);
+
+  const glError = () =>
+    page.evaluate(() => (document.querySelector('#game') as HTMLCanvasElement).getContext('webgl2')!.getError());
+
+  // Rift scenario on the tiny test level.
+  await page.goto(`${URL}?level=test_rift`);
+  await page.waitForSelector('#game:not([hidden])', { timeout: 10_000 });
+  await sleep(300);
+  await page.keyboard.press('Enter');
+  await sleep(200);
+  const beforeRift = await shot('10-before-rift');
+  await page.keyboard.down('ArrowRight');
+  await sleep(700); // into the rift and mid-pivot
+  const midShift = await shot('11-mid-shift');
+  // Resize during the shift: targets must follow without errors (Review Focus).
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await sleep(900);
+  await page.keyboard.up('ArrowRight');
+  const future = await shot('12-future');
+  check(!beforeRift.equals(midShift) && !midShift.equals(future), 'the rift transforms the image over time');
+  check((await glError()) === 0, 'no WebGL error after the shift and a resize');
+  const t0 = await shot('13-future-a');
+  await sleep(300);
+  const t1 = await shot('14-future-b');
+  check(!t0.equals(t1), 'game loop still running in the future (motes/scanlines animate)');
+
   check(problems.length === 0, `no console errors/warnings${problems.length ? `:\n${problems.join('\n')}` : ''}`);
   await browser.close();
   console.log(`screenshots in ${OUT}/`);
