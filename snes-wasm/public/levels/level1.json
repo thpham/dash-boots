@@ -1,23 +1,98 @@
 {
   "compressionlevel": -1,
-  "height": 1,
+  "height": 5,
   "infinite": false,
   "layers": [
     {
-      "data": [1],
-      "height": 1,
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ],
+      "height": 5,
       "id": 1,
-      "name": "Tile Layer 1",
+      "name": "terrain",
       "opacity": 1,
       "type": "tilelayer",
       "visible": true,
-      "width": 1,
+      "width": 10,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+      ],
+      "height": 5,
+      "id": 2,
+      "name": "collision",
+      "opacity": 1,
+      "type": "tilelayer",
+      "visible": true,
+      "width": 10,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "data": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "height": 5,
+      "id": 3,
+      "name": "coins",
+      "opacity": 1,
+      "type": "tilelayer",
+      "visible": true,
+      "width": 10,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "draworder": "topdown",
+      "id": 4,
+      "name": "objects",
+      "objects": [
+        {
+          "id": 1,
+          "name": "player_spawn",
+          "type": "player_spawn",
+          "x": 16,
+          "y": 16
+        },
+        {
+          "id": 2,
+          "name": "enemy_spawn",
+          "type": "enemy_spawn",
+          "x": 64,
+          "y": 16
+        },
+        {
+          "id": 3,
+          "name": "goal",
+          "type": "goal",
+          "x": 128,
+          "y": 16
+        }
+      ],
+      "opacity": 1,
+      "type": "objectgroup",
+      "visible": true,
       "x": 0,
       "y": 0
     }
   ],
-  "nextlayerid": 2,
-  "nextobjectid": 1,
+  "nextlayerid": 5,
+  "nextobjectid": 4,
   "orientation": "orthogonal",
   "renderorder": "right-down",
   "tiledversion": "1.10.2",
@@ -25,5 +100,5 @@
   "tilewidth": 16,
   "type": "map",
   "version": "1.10",
-  "width": 1
+  "width": 10
 }

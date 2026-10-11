@@ -9,6 +9,20 @@ pub struct LevelData {
     pub terrain: Vec<u16>,
     pub collision: Vec<u8>,
     pub coins: Vec<u8>,
+    pub spawns: Spawns,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Spawns {
+    pub player: SpawnPoint,
+    pub enemies: Vec<SpawnPoint>,
+    pub goal: SpawnPoint,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SpawnPoint {
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Clone, Debug)]
