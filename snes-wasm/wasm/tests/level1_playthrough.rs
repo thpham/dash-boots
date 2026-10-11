@@ -146,6 +146,9 @@ fn bot_completes_level1() {
         g.coins_total,
         g.deaths
     );
+    use snes_wasm::world::shift::World;
+    assert_eq!(g.shift.world(), World::Past, "the flag is reached in the past");
+    assert!(g.rifts.iter().all(|r| !r.active), "both excursions crossed");
     assert!(g.deaths <= 3, "level too punishing for a naive bot: {} deaths", g.deaths);
 }
 
@@ -156,6 +159,7 @@ fn level1_has_expected_content() {
     assert!(g.enemies.len() >= 10);
     assert_eq!(g.pickups.len(), 1, "one dash boots pickup");
     assert_eq!(g.checkpoints.len(), 3);
+    assert_eq!(g.rifts.len(), 4, "two excursions: 2 rifts out, 2 back");
     // Player spawns standing on ground.
     let p = g.player;
     assert!(overlaps_solid(&g.level, p.pos.x, p.feet().y, player::WIDTH, 1.0));

@@ -153,8 +153,8 @@ def build():
     L.plank(83, 85, 11)
     L.coin_row(83, 85, 9)
     L.ground(89, 125)
-    L.on_surface('enemy_spawn', 92)
-    L.on_surface('enemy_spawn', 95)
+    L.on_surface('rift', 90)                   # excursion 1: into the future
+    L.on_surface('enemy_spawn', 108)
     L.stairs(97, 4, up=True)
     L.pit(101, 102)
     L.stairs(103, 4, up=False)
@@ -165,13 +165,14 @@ def build():
     L.obj('enemy_spawn', 113, 8)
     L.decorate(BUSH_L, 120)
     L.decorate(BUSH_R, 121)
+    L.on_surface('rift', 115)                  # back to the past before checkpoint 2
     L.on_surface('checkpoint', 117)
 
     # D. Big gap, enemy parade, mandatory slide tunnel ----------------------
     L.pit(126, 133)                            # 8 wide: boots jump, or use the pillar
     L.block(STONEK, 129, 12, 130, 14)           # stepping pillar
     L.coin_arc(126, 133, 6, height=2)
-    L.ground(134, 160)
+    L.ground(134, 166)
     L.on_surface('enemy_spawn', 141)
     L.on_surface('enemy_spawn', 145)
     L.on_surface('enemy_spawn', 148)
@@ -184,22 +185,22 @@ def build():
     L.decorate(TUFT, 159)
 
     # E. Climb, plateau, finale ----------------------------------------------
-    L.plank(162, 164, 10)
-    L.plank(167, 169, 8)
-    L.coin_row(167, 169, 6)
-    L.ground(161, 161)
-    L.pit(161, 171)
-    L.ground(172, 186, top=9)                  # high plateau
-    L.on_surface('checkpoint', 174)
-    L.on_surface('enemy_spawn', 179)
+    L.on_surface('rift', 158)                  # excursion 2: out of the tunnel, into the future
+    L.pit(167, 176)
+    L.plank(168, 170, 10)
+    L.plank(172, 174, 8)
+    L.coin_row(172, 174, 6)
+    L.ground(177, 186, top=9)                  # high plateau
+    L.on_surface('checkpoint', 178)            # remembers the future
     L.on_surface('enemy_spawn', 182)
-    L.decorate(FENCE, 176)
-    L.decorate(FENCE, 177)
+    L.decorate(FENCE, 180)
+    L.decorate(FENCE, 181)
     L.ground(187, 219)
-    L.coin_arc(187, 191, 7, height=1)
-    L.on_surface('enemy_spawn', 194)
+    L.on_surface('rift', 188)                  # back to the past for the last stretch
+    L.coin_arc(189, 193, 7, height=1)
     L.pit(197, 199)
     L.coin_row(197, 199, 9)
+    L.on_surface('enemy_spawn', 201)
     L.stairs(203, 5, up=True)
     L.on_surface('goal', 212, w=16, h=48)
     L.decorate(BUSH_L, 215)
@@ -299,8 +300,8 @@ def write_compact_json(path, m):
 
 
 def print_map(L):
-    marks = {o['kind']: c for c, o in zip('PEGCB', [{'kind': k} for k in
-             ['player_spawn', 'enemy_spawn', 'goal', 'checkpoint', 'dash_boots']])}
+    marks = {o['kind']: c for c, o in zip('PEGCBR', [{'kind': k} for k in
+             ['player_spawn', 'enemy_spawn', 'goal', 'checkpoint', 'dash_boots', 'rift']])}
     objs = {}
     for o in L.objects:
         cx = int((o['x'] + o['w'] / 2) // TS)
@@ -319,12 +320,33 @@ def print_map(L):
         print(line)
 
 
+def build_test_rift():
+    """Tiny flat level used by the e2e test: a rift right after the spawn."""
+    global W
+    saved_w = W
+    W = 60
+    L = Level()
+    L.ground(0, W - 1)
+    L.on_surface('player_spawn', 2)
+    L.on_surface('rift', 5)
+    L.on_surface('goal', 56, w=16, h=48)
+    m = to_tiled(L)
+    W = saved_w
+    return m
+
+
 def main():
+    global W
     L = build()
     m = to_tiled(L)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     write_compact_json(OUT, m)
     print(f'wrote {OUT}: {W}x{H}, {len(L.coins)} coins, {len(L.objects)} objects')
+    test_out = os.path.join(ROOT, 'public', 'levels', 'test_rift.json')
+    m2 = build_test_rift()
+    with open(test_out, 'w') as f:
+        json.dump(m2, f)
+    print(f'wrote {test_out}')
     if '--print' in sys.argv:
         print_map(L)
 

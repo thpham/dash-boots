@@ -35,11 +35,17 @@ async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
+function levelUrl(): string {
+  const name = new URLSearchParams(location.search).get('level') ?? 'level1';
+  if (!/^[a-z0-9_-]+$/.test(name)) throw new Error(`Invalid level name: ${name}`);
+  return `${BASE}levels/${name}.json`;
+}
+
 async function main() {
   const canvas = document.querySelector<HTMLCanvasElement>('#game');
   if (!canvas) throw new Error('Missing #game canvas');
 
-  const [wasm, levelJson] = await Promise.all([initWasm(), fetchText(`${BASE}levels/level1.json`)]);
+  const [wasm, levelJson] = await Promise.all([initWasm(), fetchText(levelUrl())]);
   const executor = new Executor(canvas);
   const game = new GameHandle(levelJson, VIEW_W, VIEW_H);
 
