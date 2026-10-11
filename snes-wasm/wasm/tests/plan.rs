@@ -26,6 +26,29 @@ fn future_size_goes_from_native_past_to_capped_canvas() {
     assert_eq!(future_size(1.0, &small), (320.0, 180.0));
 }
 
+/// Plan index layout contract. The host's `src/platform/plan.ts` mirrors these
+/// exact numbers (it reads the WASM block raw, with no serialization), so the
+/// layout may only change together with that file, never by accident.
+#[test]
+fn plan_layout_contract() {
+    assert_eq!(PLAN_LEN, 34);
+    assert_eq!(idx::VIEW_PROJ, 0); // 16 floats, column-major
+    assert_eq!(idx::EYE, 16); // 3
+    assert_eq!(idx::TIME, 19);
+    assert_eq!(idx::WORLD_MIX, 20);
+    assert_eq!(idx::FUTURE_W, 21);
+    assert_eq!(idx::FUTURE_H, 22);
+    assert_eq!(idx::GLITCH, 23);
+    assert_eq!(idx::CRT, 24);
+    assert_eq!(idx::WARMTH, 25);
+    assert_eq!(idx::VIGNETTE, 26);
+    assert_eq!(idx::BLOOM, 27);
+    assert_eq!(idx::CAM_RIGHT, 28); // 3
+    assert_eq!(idx::FUTURE_ENABLED, 31);
+    assert_eq!(idx::FLOOR_Y, 32);
+    assert_eq!(idx::FOCUS_X, 33);
+}
+
 #[test]
 fn plan_values_stay_finite_and_bounded_through_two_shifts() {
     for reduced in [false, true] {
