@@ -186,4 +186,14 @@ impl GameHandle {
     pub fn restart(&mut self) {
         self.game.restart();
     }
+
+    /// Music track index for the current level (see `audio::MUSIC_NAMES`).
+    pub fn set_music(&mut self, id: u8) {
+        self.game.set_music(id);
+    }
+
+    /// Whether this is the campaign's last level (adapts the clear-screen text).
+    pub fn set_last_level(&mut self, last: bool) {
+        self.game.set_last_level(last);
+    }
 }

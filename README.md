@@ -4,6 +4,9 @@ An original 16-bit style platformer. The whole game simulation lives in Rust,
 compiled to WebAssembly; a thin TypeScript/Vite layer handles assets, input,
 WebGL2 and WebAudio.
 
+Four levels in three more themes (sunset, caverns, night), one chiptune per
+level, and the run saved in `localStorage` — a refresh resumes where you were.
+
 **Play online, free:** https://thpham.github.io/dash-boots/ — the site is built
 and published by GitHub Actions on `v*` tags (deploy-pages workflow).
 
@@ -11,7 +14,7 @@ and published by GitHub Actions on `v*` tags (deploy-pages workflow).
 
 | Path | What it is |
 |---|---|
-| `snes-wasm/` | The game (simulation crate, web platform layer, level) |
+| `snes-wasm/` | The game (simulation crate, web platform layer, levels) |
 | `snes-wasm/wasm/` | Rust crate compiled to WASM (physics, rules, Tiled parser, bot) |
 | `snes-wasm/tools/` | Stdlib-only Python generators for the original art, audio and level |
 | `flake.nix` | The dev environment (rust, wasm-pack, node, chromium) — used identically in CI |

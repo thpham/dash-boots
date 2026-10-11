@@ -59,6 +59,13 @@ pub struct Game {
     pub deaths: u32,
     /// Simulation steps since boot (animation clock).
     pub frame: u64,
+    /// Music track chosen by the host (index into `audio::MUSIC_NAMES`).
+    pub music: u8,
+    /// Last level of the campaign: the clear prompt adapts ("THE END").
+    pub last_level: bool,
+    /// `LevelClear` already emitted on this clear screen (the host decides what
+    /// happens next; extra presses must stay silent).
+    cleared_emitted: bool,
     input: InputTracker,
     timestep: FixedTimestep,
     audio: Vec<AudioEvent>,
@@ -107,6 +114,9 @@ impl Game {
             time: 0.0,
             deaths: 0,
             frame: 0,
+            music: MUSIC_LEVEL1,
+            last_level: false,
+            cleared_emitted: false,
             input: InputTracker::default(),
             timestep: FixedTimestep::new(60.0),
             audio: Vec::new(),
@@ -116,10 +126,20 @@ impl Game {
         game
     }
 
+    /// Music track of the current level (host calls this after level swap).
+    pub fn set_music(&mut self, id: u8) {
+        assert!((id as usize) < crate::audio::MUSIC_NAMES.len(), "unknown music track {id}");
+        self.music = id;
+    }
+
+    pub fn set_last_level(&mut self, last: bool) {
+        self.last_level = last;
+    }
+
     /// Start playing immediately (skips the title screen).
     pub fn start(&mut self) {
         self.set_phase(Phase::Playing);
-        self.audio.push(AudioEvent::PlayMusic(MUSIC_LEVEL1));
+        self.audio.push(AudioEvent::PlayMusic(self.music));
         self.audio.push(AudioEvent::MusicFuture(self.shift.world() == World::Future));
     }
 
@@ -137,10 +157,13 @@ impl Game {
         let (vw, vh) = (self.camera.view_w, self.camera.view_h);
         let fresh = Game::new(data, vw, vh);
         // Keep host-facing state: the input tracker (a held Enter must not
-        // count as a new press), the timestep accumulator and the anim clock.
+        // count as a new press), the timestep accumulator and the anim clock,
+        // the level's music track and last-level flag (the host sets those
+        // after building us — a mid-campaign restart must not lose them).
         let (input, timestep, frame) = (self.input, self.timestep, self.frame);
+        let (music, last_level) = (self.music, self.last_level);
         let audio = std::mem::take(&mut self.audio);
-        *self = Game { input, timestep, frame, audio, ..fresh };
+        *self = Game { input, timestep, frame, music, last_level, audio, ..fresh };
         self.start();
     }
 
@@ -230,7 +253,7 @@ impl Game {
                 if self.phase_time >= DEATH_DURATION {
                     self.reset_actors();
                     self.set_phase(Phase::Playing);
-                    self.audio.push(AudioEvent::PlayMusic(MUSIC_LEVEL1));
+                    self.audio.push(AudioEvent::PlayMusic(self.music));
                     self.audio.push(AudioEvent::MusicFuture(self.shift.world() == World::Future));
                 }
             }
@@ -244,8 +267,12 @@ impl Game {
                     self.particles.burst(ParticleKind::Sparkle, at, 8, 50.0, 0.6);
                 }
                 self.particles.update(DT);
-                if self.phase_time > CLEAR_INPUT_DELAY && (b.start_pressed || b.jump_pressed) {
-                    self.restart();
+                if self.phase_time > CLEAR_INPUT_DELAY
+                    && (b.start_pressed || b.jump_pressed)
+                    && !self.cleared_emitted
+                {
+                    self.cleared_emitted = true;
+                    self.audio.push(AudioEvent::LevelClear);
                 }
             }
         }

@@ -11,15 +11,78 @@ import { PLAN, type FrameData } from './platform/plan';
 const VIEW_W = 320;
 const VIEW_H = 180;
 const BASE = import.meta.env.BASE_URL;
+// Reserved code (wasm/src/audio.rs LEVEL_CLEAR): the clear screen is done and
+// the host should move on (next level, or replay on the last one).
+const LEVEL_CLEAR_CODE = 250;
+const SAVE_KEY = 'dash-boots-progress';
 
-// Texture ids must match wasm/src/render/mod.rs (TEX_*).
-const TEXTURES: TextureSpec[] = [
-  { id: 0, url: `${BASE}assets/bg_far.png`, repeatX: true },
-  { id: 1, url: `${BASE}assets/bg_near.png`, repeatX: true },
-  { id: 2, url: `${BASE}assets/tiles.png` },
-  { id: 3, url: `${BASE}assets/sprites.png` },
-  { id: 4, url: `${BASE}assets/font.png` },
+// The campaign: one level per entry, in order. Texture ids 0/1/2 (parallax +
+// tiles) are theme-dependent; sprites and font stay shared.
+type Theme = 'meadow' | 'sunset' | 'cave' | 'night';
+const THEME_FILES: Record<Theme, { bgFar: string; bgNear: string; tiles: string }> = {
+  meadow: { bgFar: 'bg_far.png', bgNear: 'bg_near.png', tiles: 'tiles.png' },
+  sunset: { bgFar: 'bg_far_sunset.png', bgNear: 'bg_near_sunset.png', tiles: 'tiles_sunset.png' },
+  cave: { bgFar: 'bg_far_cave.png', bgNear: 'bg_near_cave.png', tiles: 'tiles_cave.png' },
+  night: { bgFar: 'bg_far_night.png', bgNear: 'bg_near_night.png', tiles: 'tiles_night.png' },
+};
+const LEVELS: { name: string; theme: Theme }[] = [
+  { name: 'level1', theme: 'meadow' },
+  { name: 'level2', theme: 'sunset' },
+  { name: 'level3', theme: 'cave' },
+  { name: 'level4', theme: 'night' },
 ];
+
+function loadProgress(): number {
+  try {
+    const saved = parseInt(localStorage.getItem(SAVE_KEY) ?? '', 10);
+    if (Number.isInteger(saved) && saved >= 0 && saved < LEVELS.length) return saved;
+  } catch {
+    // Storage unavailable (private mode…): start from the first level.
+  }
+  return 0;
+}
+
+function saveProgress(levelIndex: number) {
+  try {
+    localStorage.setItem(SAVE_KEY, String(levelIndex));
+  } catch {
+    // Ignore: progression simply won't survive a refresh.
+  }
+}
+
+function levelUrl(index: number, name: string): string {
+  return `${BASE}levels/${(index >= 0 ? LEVELS[index].name : name)}.json`;
+}
+
+/** Boot level: `?level=<name>` wins (any shipped level, e.g. the test ones,
+ * run standalone on the meadow theme), else the saved progression. */
+function startLevel(): { name: string; index: number } {
+  const name = new URLSearchParams(location.search).get('level');
+  if (name !== null) {
+    if (!/^[a-z0-9_-]+$/.test(name)) throw new Error(`Invalid level name: ${name}`);
+    return { name, index: LEVELS.findIndex((l) => l.name === name) };
+  }
+  const index = loadProgress();
+  return { name: LEVELS[index].name, index };
+}
+
+/** Theme-dependent textures (ids 0/1/2) then the shared ones (sprites, font). */
+function texturesFor(theme: Theme): TextureSpec[] {
+  const files = THEME_FILES[theme];
+  return [
+    { id: 0, url: `${BASE}assets/${files.bgFar}`, repeatX: true },
+    { id: 1, url: `${BASE}assets/${files.bgNear}`, repeatX: true },
+    { id: 2, url: `${BASE}assets/${files.tiles}` },
+    { id: 3, url: `${BASE}assets/sprites.png` },
+    { id: 4, url: `${BASE}assets/font.png` },
+  ];
+}
+
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load ${url}: HTTP ${res.status}`);
+  return res.text();
+}
 
 function showError(message: string) {
   const el = document.querySelector<HTMLElement>('#status');
@@ -30,58 +93,99 @@ function showError(message: string) {
   }
 }
 
-async function fetchText(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load ${url}: HTTP ${res.status}`);
-  return res.text();
-}
-
-function levelUrl(): string {
-  const name = new URLSearchParams(location.search).get('level') ?? 'level1';
-  if (!/^[a-z0-9_-]+$/.test(name)) throw new Error(`Invalid level name: ${name}`);
-  return `${BASE}levels/${name}.json`;
-}
-
 async function main() {
   const canvas = document.querySelector<HTMLCanvasElement>('#game');
   if (!canvas) throw new Error('Missing #game canvas');
 
-  const [wasm, levelJson] = await Promise.all([initWasm(), fetchText(levelUrl())]);
+  const wasm = await initWasm();
   const executor = new Executor(canvas);
-  const game = new GameHandle(levelJson, VIEW_W, VIEW_H);
-
-  const sizes = await executor.loadTextures(TEXTURES);
-  TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
-  const size = (id: number) => sizes[TEXTURES.findIndex((t) => t.id === id)];
-  game.set_future_supported(executor.enableFuture([size(2).w, size(2).h], [size(3).w, size(3).h]));
-  // If the future renderer throws at render time, fall back to the past world.
-  executor.onFutureLost = () => game.set_future_supported(false);
-
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  game.set_reduced_motion(motion.matches);
-  motion.addEventListener('change', () => game.set_reduced_motion(motion.matches));
-  const cap = new FutureCap((h) => game.set_max_future_height(h));
+
+  let crt = true;
+  let viewport = { w: VIEW_W, h: VIEW_H };
+  // Set once the boot level is built below; handlers created meanwhile guard
+  // with `?.` so a blur before boot is a harmless no-op.
+  let game: GameHandle;
+  const bootLevel = startLevel();
+  // index -1: a standalone ?level= launch (test levels); it replays itself.
+  let currentLevel = bootLevel.index;
+  let swapping = false;
+  const launchedFromQuery = new URLSearchParams(location.search).has('level');
+  const cap = new FutureCap((maxHeight) => game?.set_max_future_height(maxHeight));
+
+  // Fetching a level and building its handle: JSON, textures, music. Every
+  // setting lives in the handle, so a swap re-applies them (configure()).
+  const buildGame = async (index: number, name: string) => {
+    const theme = index >= 0 ? LEVELS[index].theme : 'meadow';
+    const files = texturesFor(theme);
+    const text = await fetchText(levelUrl(index, name));
+    const handle = new GameHandle(text, VIEW_W, VIEW_H);
+    if (index >= 0) handle.set_music(index); // music stem audio/music/level<N>.wav
+    handle.set_last_level(index < 0 || index === LEVELS.length - 1);
+    const sizes = await executor.loadTextures(files);
+    files.forEach((f, i) => handle.set_texture_size(f.id, sizes[i].w, sizes[i].h));
+    configure(handle);
+    return { handle, sizes };
+  };
+  const configure = (game: GameHandle) => {
+    game.set_viewport(viewport.w, viewport.h);
+    game.set_future_supported(executor.futureReady);
+    game.set_reduced_motion(motion.matches);
+    game.set_max_future_height(cap.current());
+    game.set_crt_enabled(crt);
+  };
+
+  const boot = await buildGame(currentLevel, bootLevel.name);
+  game = boot.handle;
+
+  // If the future pipeline is unavailable, the game stays in the past world.
+  // Theme tilesets keep identical dimensions, so no re-call on level swaps.
+  const [tileSize, spriteSize] = [boot.sizes[2], boot.sizes[3]];
+  game.set_future_supported(executor.enableFuture([tileSize.w, tileSize.h], [spriteSize.w, spriteSize.h]));
 
   const audio = createAudio(BASE, sfx_names(), music_names());
   const input = createInput();
+
+  // Clear screen done: the sim emitted LEVEL_CLEAR. Advance (or replay on the
+  // last level and on standalone ?level= launches); save progress so a
+  // refresh resumes at the right level.
+  const advance = async () => {
+    if (currentLevel < 0 || currentLevel + 1 >= LEVELS.length) {
+      game.restart(); // replay (existing clear-screen behaviour)
+      return;
+    }
+    const next = currentLevel + 1;
+    if (swapping) return;
+    swapping = true;
+    try {
+      const built = await buildGame(next, LEVELS[next].name);
+      currentLevel = next;
+      game = built.handle;
+      if (!launchedFromQuery) saveProgress(next);
+      game.restart(); // into play directly: the player just finished one
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      swapping = false;
+    }
+  };
 
   // Browsers only allow audio after a user gesture.
   const unlock = () => audio.unlock();
   window.addEventListener('keydown', unlock);
   window.addEventListener('pointerdown', unlock);
-  let crt = true;
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     if (e.code === 'KeyM') audio.toggleMute();
     if (e.code === 'KeyC') {
       crt = !crt;
-      game.set_crt_enabled(crt);
+      game?.set_crt_enabled(crt);
     }
   });
 
   const pause = () => {
     input.reset();
-    game.pause();
+    game?.pause();
   };
   window.addEventListener('blur', pause);
   document.addEventListener('visibilitychange', () => {
@@ -89,7 +193,8 @@ async function main() {
   });
   const resize = () => {
     const { w, h } = executor.resize();
-    game.set_viewport(w, h);
+    viewport = { w, h };
+    game?.set_viewport(w, h);
   };
   window.addEventListener('resize', resize);
   resize();
@@ -102,7 +207,9 @@ async function main() {
     const dt = now - last;
     last = now;
     game.frame(input.poll(), dt);
-    audio.handle(game.take_audio_events());
+    const codes = game.take_audio_events();
+    if (codes.includes(LEVEL_CLEAR_CODE)) void advance();
+    audio.handle(codes.filter((c) => c !== LEVEL_CLEAR_CODE));
     // Views are re-created every frame: WASM memory may grow and move.
     const mem = wasm.memory.buffer;
     const frameData: FrameData = {

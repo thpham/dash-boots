@@ -15,7 +15,7 @@ install:
 assets:
   cd {{web}} && python3 tools/gen_art.py && python3 tools/gen_audio.py
 
-# Regenerate public/levels/level1.json (overwrites edits made in Tiled!)
+# Regenerate public/levels/*.json (overwrites edits made in Tiled!)
 level:
   cd {{web}} && python3 tools/gen_level.py
 
@@ -23,7 +23,7 @@ level:
 wasm-build:
   cd {{crate}} && wasm-pack build --release --target web --out-dir pkg
 
-# Run Rust tests (physics, rules, Tiled parser, bot playthrough of level1)
+# Run Rust tests (physics, rules, Tiled parser, bot playthrough of levels 1-4)
 wasm-test:
   cd {{crate}} && cargo test
 

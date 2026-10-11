@@ -3,10 +3,16 @@
 
 Outputs (in public/assets/):
   sprites.png  256x128  sprite atlas (layout mirrored in wasm/src/sprites.rs)
-  tiles.png    128x48   16x16 tileset (gid = index + 1, used by levels/level1.json)
+  tiles.png    128x48   16x16 tileset (gid = index + 1, shared by every level)
   font.png     128x48   8x8 bitmap font, ASCII 32..127 (+ colored icons on '#', '$', '^')
   bg_far.png   320x180  sky + mountains + clouds (opaque, horizontally tileable)
   bg_near.png  320x180  hills (transparent top, horizontally tileable)
+  plus same-dimension theme variants (exact color remaps) for the campaign:
+  tiles_{sunset,cave,night}.png, bg_{far,near}_{sunset,cave,night}.png
+
+The future 3D pass keys the sky out of bg_far's sampled band (row 76 down):
+theme skies must keep g > r + 31 there and mountain remaps g - r <= 24
+(checked by asserts in main() — see FAR_THEMES).
 
 Usage: python3 tools/gen_art.py [--preview DIR]
 """
@@ -837,12 +843,110 @@ def periodic(x, terms, period=320):
     return sum(a * math.sin(2 * math.pi * k * x / period + ph) for (k, a, ph) in terms)
 
 
-def build_bg_far():
+# --------------------------------------------------------------------------
+# Themes: exact color remaps that build level-2-4 variants of the meadow art.
+# Keys are meadow source colors; anything unlisted stays as-is.
+# --------------------------------------------------------------------------
+
+def recolor(cv, mapping):
+    """Swap every pixel exactly equal to a mapped source color."""
+    table = {C(k): C(v) for k, v in mapping.items()}
+    for y in range(cv.h):
+        row = cv.px[y]
+        for x in range(cv.w):
+            c = row[x]
+            if c in table:
+                row[x] = table[c]
+
+
+MEADOW_SKY = [C('#3a6ad8'), C('#5aa0f0'), C('#8cd0f8'), C('#d0f0ff')]
+
+# bg_far: the future 3D pass samples the image from row 76 down, so the LAST
+# sky stop (which fills rows >= span) must keep the keying (g > r + 31) and
+# every mountain remap must stay a mountain (g - r <= 24). Upper stops and
+# clouds only render in the 2D parallax view — any color works there.
+FAR_THEMES = {
+    'sunset': {
+        'sky': [C('#2a1656'), C('#6a2a7e'), C('#d85a48'), C('#2e8898')],
+        'span': 72.0,
+        'remap': {
+            '#ffffff': '#fff2d8', '#d8e8f8': '#f0b0a0',   # clouds: rose gold
+            '#a8b8e8': '#c87890', '#8898d0': '#a05878',   # far range: mauve
+            '#f0f4ff': '#ffd8c0', '#d0dcf4': '#e8b098',   # sun-tinted caps
+            '#7890d0': '#6a3070', '#6478b8': '#502458',   # near range: dusk
+        },
+    },
+    'cave': {
+        'sky': [C('#06060e'), C('#0c1020'), C('#141a30'), C('#0e3848')],
+        'span': 72.0,
+        'remap': {
+            '#ffffff': '#28304a', '#d8e8f8': '#1c2238',   # mist
+            '#a8b8e8': '#4a5068', '#8898d0': '#363c52',   # far rock
+            '#f0f4ff': '#c0cee0', '#d0dcf4': '#9cb0cc',   # pale crystal caps
+            '#7890d0': '#252a40', '#6478b8': '#1a1e30',   # near rock
+        },
+    },
+    'night': {
+        'sky': [C('#080c1e'), C('#0e1630'), C('#16264a'), C('#0e4058')],
+        'span': 72.0,
+        'remap': {
+            '#ffffff': '#c8d4f0', '#d8e8f8': '#98a8d0',   # faint moon cloud
+            '#a8b8e8': '#6a78b0', '#8898d0': '#546098',   # moonlit slate
+            '#f0f4ff': '#c8d4ee', '#d0dcf4': '#a8b4d0',
+            '#7890d0': '#3a4480', '#6478b8': '#2a3068',
+        },
+    },
+}
+
+NEAR_THEMES = {
+    'sunset': {  # golden dry hills, olive trees
+        '#a0e878': '#f0d878', '#58c060': '#c09c48', '#3a9a50': '#947030', '#2a7a48': '#664c1e',
+        '#2e8a40': '#7c5c22', '#48a850': '#98742c', '#6a4020': '#503018',
+    },
+    'cave': {
+        '#a0e878': '#4a5e8c', '#58c060': '#2e3c60', '#3a9a50': '#1f2c48', '#2a7a48': '#131c30',
+        '#2e8a40': '#234a66', '#48a850': '#396a84', '#6a4020': '#101c2c',
+    },
+    'night': {
+        '#a0e878': '#5878a8', '#58c060': '#2e4a74', '#3a9a50': '#1e3458', '#2a7a48': '#122238',
+        '#2e8a40': '#18324e', '#48a850': '#2a446c', '#6a4020': '#0c1626',
+    },
+}
+
+TILE_THEMES = {
+    'sunset': {  # golden dry grass, warm ground
+        '#9ce858': '#f4d862', '#4cba34': '#d4a832', '#2a7a28': '#a0761e',
+        '#78d860': '#e8c060', '#3aa040': '#b8862e', '#1e6a30': '#7c5c1c',
+        '#2a8a38': '#9a7424', '#f870a0': '#ff9440', '#a02050': '#c44c14',
+        '#3a2438': '#5c2030', '#2a1828': '#3a1420',
+    },
+    'cave': {  # teal moss on dark stone, crystal bushes, glow toadstools
+        '#9ce858': '#5ae0c0', '#4cba34': '#2a9a80', '#2a7a28': '#1a6a56',
+        '#c47a3a': '#5c5674', '#8a5028': '#3c3652', '#e0a060': '#7e7694', '#5a3018': '#221e34',
+        '#9098b0': '#707692', '#4a5068': '#424a66', '#d0d8e8': '#9aa2ba', '#a8b0c8': '#7e86a0',
+        '#78d860': '#50d8d0', '#3aa040': '#30a0a0', '#1e6a30': '#1e6a6e',
+        '#2a8a38': '#38688c', '#f870a0': '#7ce8ff', '#a02050': '#2c7ac8', '#ffe040': '#eaffff',
+        '#3a2438': '#46295a', '#2a1828': '#301c44',
+        '#a0a0b0': '#767696', '#585868': '#444460', '#d8d8e0': '#a0a0c4',
+        '#f0b030': '#b878f0', '#8a5010': '#6a30a0', '#fff0a0': '#e8bcff',
+    },
+    'night': {  # moonlit frost grass, cold dirt, violet brick
+        '#9ce858': '#8fd8c0', '#4cba34': '#3f9a80', '#2a7a28': '#266a58',
+        '#c47a3a': '#68688e', '#8a5028': '#42426a', '#e0a060': '#8e8eb2', '#5a3018': '#262642',
+        '#d0603a': '#8a6ab8', '#7a2a20': '#4c3a70', '#f09060': '#b2a0d8',
+        '#78d860': '#74c8d4', '#3aa040': '#3f8f96', '#1e6a30': '#2c606a',
+        '#2a8a38': '#33627a', '#f870a0': '#d8e8ff', '#a02050': '#6a7ac0', '#ffe040': '#ffffff',
+        '#3a2438': '#22284a', '#2a1828': '#141832',
+    },
+}
+
+
+def build_bg_far(sky=MEADOW_SKY, span=130.0):
     w, h = 320, 180
     cv = Canvas(w, h)
-    stops = [C('#3a6ad8'), C('#5aa0f0'), C('#8cd0f8'), C('#d0f0ff')]
+    stops = sky
     for y in range(h):
-        t = min(1.0, y / 130.0) * (len(stops) - 1)
+        t = min(1.0, y / span) * (len(stops) - 1)
         i = min(int(t), len(stops) - 2)
         f = t - i
         for x in range(w):
@@ -924,12 +1028,23 @@ def build_bg_near():
     return cv
 
 
+def assert_band_safe(stops, remap):
+    """The future 3D pass keys bg_far's band (row 76 down): the flat bottom
+    sky must key out (g > r + 31) and every mountain remap must stay alpha."""
+    c = stops[-1]
+    assert c[1] - c[0] >= 31, f'sky bottom {c} fails the future keying'
+    for v in remap.values():
+        c = C(v)
+        assert c[1] - c[0] <= 24, f'mountain/cloud color {v} fails the keying'
+
+
 def main():
     prev_dir = None
     if '--preview' in sys.argv:
         prev_dir = sys.argv[sys.argv.index('--preview') + 1]
         os.makedirs(prev_dir, exist_ok=True)
     os.makedirs(OUT, exist_ok=True)
+    assert_band_safe(MEADOW_SKY, {})
     outputs = {
         'sprites.png': build_sprites(),
         'tiles.png': build_tiles(),
@@ -937,6 +1052,20 @@ def main():
         'bg_far.png': build_bg_far(),
         'bg_near.png': build_bg_near(),
     }
+    # Campaign themes: fresh builds, then exact remaps to the themed palette.
+    for theme, cfg in FAR_THEMES.items():
+        assert_band_safe(cfg['sky'], cfg['remap'])
+        far = build_bg_far(cfg['sky'], cfg['span'])
+        recolor(far, cfg['remap'])
+        outputs[f'bg_far_{theme}.png'] = far
+    for theme, mapping in NEAR_THEMES.items():
+        near = build_bg_near()
+        recolor(near, mapping)
+        outputs[f'bg_near_{theme}.png'] = near
+    for theme, mapping in TILE_THEMES.items():
+        tiles = build_tiles()
+        recolor(tiles, mapping)
+        outputs[f'tiles_{theme}.png'] = tiles
     icon = Canvas(32, 32)
     for y, row in enumerate(BOOTS_PICKUP):
         for x, ch in enumerate(row):

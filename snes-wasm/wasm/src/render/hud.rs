@@ -69,7 +69,7 @@ fn draw_clear(g: &Game, r: &mut RenderList) {
         return;
     }
     let top = (vh - 96.0) * 0.5;
-    r.text_centered(top + 8.0, "COURSE CLEAR!", YELLOW, 2.0);
+    r.text_centered(top + 8.0, if g.last_level { "THE END!" } else { "COURSE CLEAR!" }, YELLOW, 2.0);
     r.text_centered(
         top + 34.0,
         &format!("COINS   {:02}/{:02}", g.coins_collected, g.coins_total),
@@ -79,6 +79,7 @@ fn draw_clear(g: &Game, r: &mut RenderList) {
     r.text_centered(top + 46.0, &format!("TIME    {}", format_time(g.time)), WHITE, 1.0);
     r.text_centered(top + 58.0, &format!("DEATHS  {:5}", g.deaths), WHITE, 1.0);
     if g.phase_time > 1.2 && (g.frame / 30).is_multiple_of(2) {
-        r.text_centered(top + 78.0, "PRESS ENTER TO PLAY AGAIN", CYAN, 1.0);
+        let prompt = if g.last_level { "PRESS ENTER TO PLAY AGAIN" } else { "PRESS ENTER TO CONTINUE" };
+        r.text_centered(top + 78.0, prompt, CYAN, 1.0);
     }
 }

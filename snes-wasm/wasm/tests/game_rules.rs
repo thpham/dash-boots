@@ -134,13 +134,50 @@ fn reaching_goal_wins_and_enter_restarts() {
     let t = g.time;
     run(&mut g, input(), 30);
     assert_eq!(g.time, t, "timer stops on clear");
-    // Input ignored for a moment, then Enter restarts.
-    run(&mut g, InputState { start: true, ..input() }, 1);
-    assert_eq!(g.phase, Phase::Won);
+    // Input ignored for a moment, then Enter signals the host to advance.
     run(&mut g, input(), 90);
     run(&mut g, InputState { start: true, ..input() }, 1);
-    assert_eq!(g.phase, Phase::Playing);
-    assert_eq!(g.time, 0.0);
+    assert!(g.drain_audio().contains(&AudioEvent::LevelClear));
+    assert_eq!(g.phase, Phase::Won, "the host swaps levels; the sim holds here");
+    // Further presses on the same screen must not re-emit the signal.
+    run(&mut g, input(), 60);
+    run(&mut g, InputState { start: true, ..input() }, 1);
+    assert!(!g.drain_audio().contains(&AudioEvent::LevelClear), "single emit");
+}
+
+#[test]
+fn level_music_track_is_selectable() {
+    let mut g = Game::new(level(&["..P......", "###....##"]), 320.0, 180.0);
+    g.set_music(2);
+    g.start();
+    assert!(g.drain_audio().contains(&AudioEvent::PlayMusic(2)));
+    // The dying→playing loop resumes the same track, not track 0.
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 200, |g| g.phase == Phase::Dying).expect("falls into the pit");
+    g.drain_audio();
+    run_until(&mut g, input(), 200, |g| g.phase == Phase::Playing).expect("respawns");
+    assert!(g.drain_audio().contains(&AudioEvent::PlayMusic(2)), "respawn resumes track 2");
+}
+
+#[test]
+fn restart_keeps_the_level_music_and_the_last_level_flag() {
+    // The host swaps to a new level then calls restart(): the fresh Game is
+    // built before set_music/set_last_level, so both must survive the rebuild.
+    let mut g = playing(&["..P......", "###....##"]);
+    g.set_music(2);
+    g.set_last_level(false);
+    g.restart();
+    assert!(g.drain_audio().contains(&AudioEvent::PlayMusic(2)), "restart resumes track 2");
+    // Entering on the clear screen of a rebuilt game keeps the flag: the
+    // replay prompt ("THE END! / PLAY AGAIN") must not revert to the continue one.
+    let mut g = playing(&["............", "..P....G....", "############"]);
+    g.set_music(3);
+    g.set_last_level(true);
+    g.restart();
+    assert!(g.last_level, "restart keeps the last-level flag");
+    run(&mut g, InputState { right: true, ..input() }, 300);
+    run_until(&mut g, InputState { right: true, ..input() }, 300, |g| g.phase == Phase::Won).unwrap();
+    assert!(g.last_level, "clear screen on the last level still knows it");
 }
 
 #[test]
@@ -180,8 +217,10 @@ fn restarting_with_enter_held_does_not_pause_the_new_game() {
     let mut g = playing(&["............", "..P....G....", "############"]);
     run_until(&mut g, InputState { right: true, ..input() }, 300, |g| g.phase == Phase::Won).unwrap();
     run(&mut g, input(), 90);
-    // Press Enter and keep holding it across the restart.
+    // The host swaps to the same level on the clear press: a held Enter must
+    // not count as a fresh press in the new game.
     run(&mut g, InputState { start: true, ..input() }, 5);
+    g.restart();
     assert_eq!(g.phase, Phase::Playing);
     assert!(!g.paused, "held Enter must not count as a second press");
 }

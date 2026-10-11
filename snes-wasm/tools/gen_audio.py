@@ -2,7 +2,7 @@
 """Generate original 16-bit style music + SFX as WAV files (stdlib only, deterministic).
 
 Outputs:
-  public/audio/music/level1.wav  seamless loop (16 bars, 150 BPM, D major)
+  public/audio/music/level{1,2,3,4}.wav  seamless loops, one per level mood
   public/audio/sfx/*.wav         jump, dash, coin, stomp, hurt, death, powerup, checkpoint, clear, bump, pause
 
 Usage: python3 tools/gen_audio.py
@@ -109,6 +109,121 @@ PROGRESSION = ['D', 'A', 'Bm', 'G', 'D', 'A', 'G', 'A',
 FIFTH = {'D': 'A', 'A': 'E', 'B': 'F#', 'G': 'D', 'F#': 'C#'}
 
 
+# One config per shipped level: same voice layout (lead, arpeggio, triangle
+# bass, drums), different key, tempo and lead timbre per level mood. The
+# 'level1' entry carries the original tune above verbatim.
+SONGS = {
+    'level1': {
+        'bpm': 150,
+        'lead': LEAD,
+        'chords': CHORDS,
+        'fifth': FIFTH,
+        'progression': PROGRESSION,
+        'duty': 0.25, 'vibrato': 0.006, 'drum_mult': 1.0,
+        'echo': (3, 0.35, 0.5),
+    },
+    # 2: golden evening over G major — softer square, laid-back 128 BPM.
+    'level2': {
+        'bpm': 128,
+        'lead': [
+            "D5-2 E5-2 G5-2 A5-2 B5-3 D6-3 B5-2",
+            "D6-4 B5-2 A5-2 G5-4 r-2 A5-2",
+            "E5-2 G5-2 A5-3 B5-1 r-2 A5-3 G5-3",
+            "G5-4 E5-2 D5-4 r-6",
+            "B5-2 D6-3 B5-1 r-2 D6-2 E6-3 D6-3",
+            "E6-4 D6-2 B5-2 D6-4 B5-4",
+            "A5-2 B5-2 D6-3 B5-1 r-2 A5-2 G5-4",
+            "E5-3 D5-1 r-2 E5-2 G5-4 A5-4",
+            "C5-2 E5-2 G5-2 A5-2 C6-3 A5-3 G5-2",
+            "A5-2 C6-4 A5-3 G5-1 r-2 E5-2 G5-2",
+            "B5-2 D6-2 E6-3 D6-1 r-2 B5-2 D6-2 E6-2",
+            "D6-4 B5-2 G5-2 A5-4 r-4",
+            "C6-2 B5-2 A5-2 B5-2 C6-3 B5-1 r-4",
+            "D6-3 E6-3 D6-2 B5-2 A5-2 B5-4",
+            "G6-3 D6-2 B5-2 G5-2 A5-2 B5-2 D5-3",
+            "E6-2 D6-2 B5-2 G5-2 A5-4 B5-4",
+        ],
+        'chords': {
+            'G': ('G', ['G3', 'B3', 'D4', 'G4']),
+            'D': ('D', ['D4', 'F#4', 'A4', 'D5']),
+            'Em': ('E', ['E3', 'G3', 'B3', 'E4']),
+            'C': ('C', ['C3', 'E3', 'G3', 'C4']),
+        },
+        'fifth': {'G': 'D', 'D': 'A', 'E': 'B', 'C': 'G'},
+        'progression': ['G', 'D', 'Em', 'C', 'G', 'D', 'C', 'D',
+                        'C', 'D', 'Em', 'C', 'G', 'D', 'Em', 'D'],
+        'duty': 0.5, 'vibrato': 0.004, 'drum_mult': 0.85,
+        'echo': (3, 0.35, 0.5),
+    },
+    # 3: caverns in E minor — thin whistle lead, slow 108 BPM, long echo.
+    'level3': {
+        'bpm': 108,
+        'lead': [
+            "E5-2 r-2 E5-2 G5-2 B5-3 A5-3 G5-2",
+            "B5-2 A5-2 G5-2 E5-2 r-2 G5-3 E5-3",
+            "E5-2 G5-2 r-2 G5-2 E5-2 r-2 C5-2 E5-2",
+            "C5-2 r-2 C5-2 E5-2 G5-4 r-2 G5-2",
+            "A5-2 r-2 A5-2 C6-2 B5-3 A5-3 G5-2",
+            "G5-2 A5-2 B5-2 A5-2 G5-2 E5-2 r-4",
+            "E4-2 r-2 B4-2 E5-2 G5-3 B5-3 G5-2",
+            "B5-2 G5-2 B5-2 E6-4 B5-2 r-4",
+            "C5-2 E5-2 G5-2 r-2 G5-2 E5-2 C5-2 E5-2",
+            "G5-2 B5-2 D6-2 B5-2 G5-3 B5-3 D6-2",
+            "E5-2 r-2 B5-2 A5-2 G5-3 A5-3 B5-2",
+            "B5-2 A5-2 G5-2 E5-2 r-2 E5-2 G5-2 B5-2",
+            "A5-2 C6-2 B5-2 A5-2 G5-2 A5-2 r-2 A5-2",
+            "G5-2 E5-2 C5-2 E5-2 G5-3 E5-3 r-2",
+            "E5-2 G5-2 B5-2 E6-2 B5-2 G5-2 B5-2 E5-2",
+            "E4-2 r-2 B4-2 r-2 E5-4 B4-4",
+        ],
+        'chords': {
+            'Em': ('E', ['E3', 'G3', 'B3', 'E4']),
+            'C': ('C', ['C3', 'E3', 'G3', 'C4']),
+            'Am': ('A', ['A3', 'C4', 'E4', 'A4']),
+            'G': ('G', ['G3', 'B3', 'D4', 'G4']),
+        },
+        'fifth': {'E': 'B', 'C': 'G', 'A': 'E', 'G': 'D'},
+        'progression': ['Em', 'Em', 'C', 'C', 'Am', 'Am', 'Em', 'Em',
+                        'C', 'G', 'Em', 'Em', 'Am', 'C', 'Em', 'Em'],
+        'duty': 0.125, 'vibrato': 0.012, 'drum_mult': 0.55,
+        'echo': (4, 0.5, 0.55),
+    },
+    # 4: starlit finale in A major — driving 160 BPM, bright 25% lead.
+    'level4': {
+        'bpm': 168,
+        'lead': [
+            "A5-2 C#6-2 E6-2 C#6-2 A5-4 E5-2 A5-2",
+            "G#5-2 A5-2 B5-2 A5-2 E5-4 B4-2 E5-2",
+            "C#5-2 F#5-2 A5-2 C#6-2 F#5-3 A5-3 C#6-2",
+            "D6-2 A5-2 F#5-2 A5-2 D6-3 A5-3 r-2",
+            "A5-2 E6-2 C#6-2 E6-2 A5-4 C#6-2 E5-2",
+            "B4-2 E5-2 G#5-2 B5-2 G#5-3 E5-3 G#5-2",
+            "F#5-2 A5-2 D6-2 A5-2 F#5-3 A5-3 r-2",
+            "D6-3 A5-1 r-2 F#5-2 A5-4 F#5-2 D5-2",
+            "A5-2 C#6-2 E6-2 A6-2 A5-4 C#6-2 E6-2",
+            "E6-2 G#5-2 B5-2 E5-2 G#5-4 B5-2 E5-2",
+            "C#6-2 A5-2 F#5-2 C#5-2 F#5-3 A5-3 C#6-2",
+            "D6-2 F#6-2 A5-2 D6-2 F#6-3 A6-3 r-2",
+            "A5-2 C#6-2 E6-2 A6-4 E6-2 C#6-2 A5-2",
+            "B5-2 E6-2 G#6-2 E6-2 B5-4 G#5-2 E5-2",
+            "D6-2 F#6-2 A6-2 F#6-2 D6-3 F#6-3 r-2",
+            "E6-2 C#6-2 A5-2 C#6-2 E5-4 A5-4",
+        ],
+        'chords': {
+            'A': ('A', ['A3', 'C#4', 'E4', 'A4']),
+            'E': ('E', ['E3', 'G#3', 'B3', 'E4']),
+            'F#m': ('F#', ['F#3', 'A3', 'C#4', 'F#4']),
+            'D': ('D', ['D4', 'F#4', 'A4', 'D5']),
+        },
+        'fifth': {'A': 'E', 'E': 'B', 'F#': 'C#', 'D': 'A'},
+        'progression': ['A', 'E', 'F#m', 'D', 'A', 'E', 'D', 'D',
+                        'A', 'E', 'F#m', 'D', 'A', 'E', 'D', 'E'],
+        'duty': 0.25, 'vibrato': 0.005, 'drum_mult': 1.0,
+        'echo': (2, 0.3, 0.4),
+    },
+}
+
+
 def parse_line(line):
     out = []
     for tok in line.split():
@@ -134,47 +249,50 @@ def render_voice(buf, start, dur, freq, wave_fn, vol, env, vibrato=0.0):
         buf[idx] += wave_fn(phase) * vol * env(t, dur)
 
 
-def render_song(loops):
-    bar_len = 16 * STEP
-    total = int(round(len(PROGRESSION) * bar_len * loops * SR))
+def render_song(loops, cfg):
+    step = 60.0 / cfg['bpm'] / 4  # one 16th note in seconds
+    bar_len = 16 * step
+    progression = cfg['progression']
+    total = int(round(len(progression) * bar_len * loops * SR))
     lead = [0.0] * total
     rest = [0.0] * total
     noise = Noise(42)
+    duty, vibrato, drum_mult = cfg['duty'], cfg['vibrato'], cfg['drum_mult']
 
     for loop in range(loops):
-        for bar, chord_name in enumerate(PROGRESSION):
-            bar_start = (loop * len(PROGRESSION) + bar) * bar_len
-            # Lead (25% pulse with vibrato).
+        for bar, chord_name in enumerate(progression):
+            bar_start = (loop * len(progression) + bar) * bar_len
+            # Lead (pulse with vibrato; duty sets the timbre).
             t = bar_start
-            for (note, d) in parse_line(LEAD[bar]):
+            for (note, d) in parse_line(cfg['lead'][bar]):
                 if note:
-                    render_voice(lead, int(t * SR), d * STEP * 0.92, note_freq(note),
-                                 lambda p: pulse(p, 0.25), 0.22,
-                                 lambda tt, dd: env_adsr(tt, dd, 0.004, 0.10, 0.55, 0.05), vibrato=0.006)
-                t += d * STEP
+                    render_voice(lead, int(t * SR), d * step * 0.92, note_freq(note),
+                                 lambda p: pulse(p, duty), 0.22,
+                                 lambda tt, dd: env_adsr(tt, dd, 0.004, 0.10, 0.55, 0.05), vibrato=vibrato)
+                t += d * step
             # Arpeggio (12.5% pulse, quiet), 16ths cycling chord tones.
-            root, tones = CHORDS[chord_name]
+            root, tones = cfg['chords'][chord_name]
             for s in range(16):
                 f = note_freq(tones[s % 4]) * 2
-                render_voice(rest, int((bar_start + s * STEP) * SR), STEP * 0.55, f,
+                render_voice(rest, int((bar_start + s * step) * SR), step * 0.55, f,
                              lambda p: pulse(p, 0.125), 0.055,
                              lambda tt, dd: env_adsr(tt, dd, 0.002, 0.03, 0.4, 0.02))
             # Bass (triangle), driving 8ths: root low/high + fifth.
             pattern = [root + '2', root + '3', root + '2', root + '3',
-                       FIFTH[root] + '2', root + '3', root + '2', FIFTH[root] + '2']
+                       cfg['fifth'][root] + '2', root + '3', root + '2', cfg['fifth'][root] + '2']
             for s, n in enumerate(pattern):
-                render_voice(rest, int((bar_start + s * 2 * STEP) * SR), 2 * STEP * 0.8, note_freq(n),
+                render_voice(rest, int((bar_start + s * 2 * step) * SR), 2 * step * 0.8, note_freq(n),
                              triangle, 0.30, lambda tt, dd: env_adsr(tt, dd, 0.003, 0.05, 0.8, 0.02))
             # Drums.
             fill = bar % 8 == 7
             for s in range(16):
-                at = int((bar_start + s * STEP) * SR)
+                at = int((bar_start + s * step) * SR)
                 if s in (0, 8) or (s == 10 and bar % 2 == 1):
                     drum_kick(rest, at)
                 if s in (4, 12) or (fill and s >= 12):
-                    drum_snare(rest, at, noise, 0.20 if not (fill and s > 12) else 0.15)
+                    drum_snare(rest, at, noise, (0.20 if not (fill and s > 12) else 0.15) * drum_mult)
                 if s % 2 == 0:
-                    drum_hat(rest, at, noise, 0.05 if s % 4 else 0.07)
+                    drum_hat(rest, at, noise, (0.05 if s % 4 else 0.07) * drum_mult)
     return lead, rest
 
 
@@ -216,13 +334,16 @@ def apply_echo(buf, delay_s, feedback, mix):
     return [buf[i] * (1 - mix) + out[i] * mix for i in range(len(buf))]
 
 
-def build_music():
+def build_music(name):
+    cfg = SONGS[name]
     # Render two loops and keep the second one so echo tails wrap seamlessly.
-    lead, rest = render_song(loops=2)
-    lead = apply_echo(lead, STEP * 3, 0.35, 0.5)
-    mix = [lead[i] + rest[i] for i in range(len(lead))]
-    half = len(mix) // 2
-    return soft_clip(mix[half:], 0.9)
+    lead, rest = render_song(loops=2, cfg=cfg)
+    step = 60.0 / cfg['bpm'] / 4
+    delay, feedback, mix = cfg['echo']
+    lead = apply_echo(lead, step * delay, feedback, mix)
+    mixed = [lead[i] + rest[i] for i in range(len(lead))]
+    half = len(mixed) // 2
+    return soft_clip(mixed[half:], 0.9)
 
 
 # --------------------------------------------------------------------------
@@ -400,7 +521,9 @@ def write_wav(path, samples):
 def main():
     for name, fn in SFX.items():
         write_wav(os.path.join(ROOT, 'public', 'audio', 'sfx', f'{name}.wav'), fn())
-    write_wav(os.path.join(ROOT, 'public', 'audio', 'music', 'level1.wav'), build_music())
+    for name in SONGS:
+        write_wav(os.path.join(ROOT, 'public', 'audio', 'music', f'{name}.wav'), build_music(name))
+        print('wrote', f'public/audio/music/{name}.wav  (SONGS[{name}])')
 
 
 if __name__ == '__main__':

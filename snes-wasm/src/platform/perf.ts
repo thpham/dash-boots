@@ -11,6 +11,11 @@ export class FutureCap {
     onChange(STEPS[0]);
   }
 
+  /** Current cap, for applying to a (re)created handle. */
+  current(): number {
+    return STEPS[this.level];
+  }
+
   sample(frameMs: number, inFuture: boolean) {
     if (!inFuture || frameMs > 250) {
       this.samples = [];
