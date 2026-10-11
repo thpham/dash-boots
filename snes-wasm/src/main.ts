@@ -5,7 +5,7 @@ import { createAudio } from './audio/audio';
 
 // Note: wasm pkg import path will be wired up in a later task.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import { GameHandle, game_tick } from '../wasm/pkg/snes_wasm';
+import initWasm, { GameHandle, game_tick } from '../wasm/pkg/snes_wasm';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('Missing #game canvas');
@@ -47,18 +47,26 @@ loadLevel('/levels/level1.json')
     console.error('failed to load level', err);
   });
 
-const game = new GameHandle();
+async function main() {
+  await initWasm();
 
-function raf() {
-  const state = input.poll();
-  // TODO: pass to WASM later
-  void state;
+  const game = new GameHandle();
 
-  renderer.resizeToDisplaySize();
-  const frame = game_tick(game);
-  for (const sfx of frame.sfx) audio.playSfx(sfx);
-  renderer.render(frame);
+  function raf() {
+    const state = input.poll();
+    // TODO: pass to WASM later
+    void state;
 
+    renderer.resizeToDisplaySize();
+    const frame = game_tick(game);
+    for (const sfx of frame.sfx) audio.playSfx(sfx);
+    renderer.render(frame);
+
+    requestAnimationFrame(raf);
+  }
   requestAnimationFrame(raf);
 }
-requestAnimationFrame(raf);
+
+main().catch((err) => {
+  console.error('fatal init error', err);
+});
