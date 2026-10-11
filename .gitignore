@@ -5,3 +5,6 @@ result-*
 
 # OS
 .DS_Store
+
+# Agent working files (brainstorm mockups, task notes)
+.superpowers/
