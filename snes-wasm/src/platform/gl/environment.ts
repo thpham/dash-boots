@@ -1,5 +1,9 @@
 import { locations, program } from './util';
 
+// Highest sampled row of bg_far (just under the clouds, which end at row 75),
+// as a texture v (v = row / 180 counts downward from the image's top).
+const BAND_TOP = (76 / 180).toFixed(4);
+
 const FLOOR_VS = `#version 300 es
 uniform mat4 u_viewProj;
 uniform float u_floorY, u_focusX;
@@ -27,25 +31,42 @@ const GHOST_VS = `#version 300 es
 uniform mat4 u_viewProj;
 uniform float u_floorY, u_focusX;
 out vec2 v_uv;
+out float v_edge;
 void main() {
   vec2 c[6] = vec2[6](vec2(0,0), vec2(1,0), vec2(0,1), vec2(0,1), vec2(1,0), vec2(1,1));
   vec2 q = c[gl_VertexID];
-  // A 3000×700 wall facing the camera, 1500 px ahead of the hero.
-  vec3 world = vec3(u_focusX + 1500.0, u_floorY + q.y * 700.0, (q.x - 0.5) * 3000.0);
-  v_uv = vec2(q.x * 3.0, mix(1.0, 0.45, q.y)); // mountains band of bg_far, repeated
+  // A 12000×700 wall facing the camera, 1500 px ahead of the hero: wide
+  // enough that no side edge is ever in view (alpha also fades toward the
+  // ends, see BAND/edge fade in GHOST_FS).
+  vec3 world = vec3(u_focusX + 1500.0, u_floorY + q.y * 700.0, (q.x - 0.5) * 12000.0);
+  // Mountains band of bg_far, upright: the wall's bottom (the horizon) samples
+  // the image's solid bottom rows (v = 1), the top samples just under the
+  // clouds (row 76 = BAND_TOP). Mountains fill the image from row 72 down.
+  v_uv = vec2(q.x * 12.0, mix(1.0, ${BAND_TOP}, q.y));
+  v_edge = q.x;
   gl_Position = u_viewProj * vec4(world, 1.0);
 }`;
 
 const GHOST_FS = `#version 300 es
 precision highp float;
 in vec2 v_uv;
+in float v_edge;
 uniform sampler2D u_tex;
 out vec4 o;
+// Highest sampled row of bg_far (just under the clouds, which end at row 75).
+const float BAND_TOP = ${BAND_TOP};
 void main() {
   vec3 c = texture(u_tex, v_uv).rgb;
+  // Key out the sky: in the sampled band every sky texel has g > r + 32/255,
+  // while every mountain texel (pastel ranges and snow) has g - r <= 24/255.
+  float mountain = 1.0 - smoothstep(0.095, 0.12, c.g - c.r);
   float lum = dot(c, vec3(0.3, 0.5, 0.2));
-  float top = smoothstep(0.45, 0.6, v_uv.y);
-  o = vec4(vec3(0.5, 0.85, 1.0) * lum, 0.22 * top);
+  // Translucent pale silhouette; the tallest tips taper off toward the wall
+  // top (band starts at row 76, solid bodies sit from row 90 down).
+  float peak_fade = smoothstep(BAND_TOP, 0.5, v_uv.y);
+  float ends = smoothstep(0.0, 0.15, v_edge) * (1.0 - smoothstep(0.85, 1.0, v_edge));
+  // Vary alpha with the shaded faces so the peaks read as shapes, not a slab.
+  o = vec4(vec3(0.62, 0.9, 1.0) * (0.45 + 0.55 * lum), 0.45 * mountain * peak_fade * ends * (0.55 + 0.45 * lum));
 }`;
 
 const MOTES_VS = `#version 300 es
