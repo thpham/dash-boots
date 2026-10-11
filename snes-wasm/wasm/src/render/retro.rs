@@ -90,6 +90,11 @@ pub fn world_sprites(g: &Game) -> Vec<WorldSprite> {
                 push(f, x, y, e.dir > 0.0, false, SpriteKind::Entity);
             }
             EnemyState::Squashed(_) => push(sprites::ENEMY_SQUASH, x, y, false, false, SpriteKind::Entity),
+            EnemyState::Flipped(_) => {
+                // On its back: upside-down, wiggling legs.
+                let f = sprites::ENEMY_WALK[((e.anim * 12.0) as usize) % 2];
+                push(f, x, y, false, true, SpriteKind::Entity);
+            }
             EnemyState::Knocked => push(sprites::ENEMY_WALK[0], x, y, false, true, SpriteKind::Entity),
             EnemyState::Dead => {}
         }
@@ -186,7 +191,22 @@ fn draw_tiles(g: &Game, r: &mut RenderList, cam: Vec2) {
                 w: sprites::TILE_SIZE,
                 h: sprites::TILE_SIZE,
             };
-            r.image(TEX_TILES, tx as f32 * ts - cam.x, ty as f32 * ts - cam.y, f, false, false, 1.0, WHITE);
+            let dy = g
+                .bumps
+                .iter()
+                .find(|b| b.ty == ty as i32 && b.tx0 <= tx as i32 && tx as i32 <= b.tx1)
+                .map(|b| b.offset())
+                .unwrap_or(0.0);
+            r.image(
+                TEX_TILES,
+                tx as f32 * ts - cam.x,
+                ty as f32 * ts - cam.y - dy,
+                f,
+                false,
+                false,
+                1.0,
+                WHITE,
+            );
         }
     }
 }

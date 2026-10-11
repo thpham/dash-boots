@@ -36,7 +36,9 @@ workflow republishes it on pushed `v*` tags (`git tag v0.1.1 && git push
 
 Gameplay: collect coins, stomp Grumbles, grab the **dash boots** (faster run, a
 dash burst that knocks enemies out, and they absorb one hit), slide through low
-tunnels, touch checkpoints, reach the flag.
+tunnels, touch checkpoints, reach the flag. Jump and bump a box from below and
+it bounces, launching the Grumbles on top: they land on their backs (harmless,
+kick them to finish them) and evaporate a moment later.
 
 ## Tasks (`just --list`)
 

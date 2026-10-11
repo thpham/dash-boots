@@ -4,7 +4,9 @@ use common::*;
 use snes_wasm::audio::{AudioEvent, Sfx};
 use snes_wasm::game::{Game, Phase};
 use snes_wasm::input::InputState;
-use snes_wasm::world::enemy::EnemyState;
+use snes_wasm::math::Vec2;
+use snes_wasm::world::enemy::{self, Enemy, EnemyState};
+use snes_wasm::world::particles::ParticleKind;
 use snes_wasm::world::shift::{ShiftState, World};
 
 #[test]
@@ -286,4 +288,88 @@ fn animation_clock_stops_while_paused() {
     run(&mut g, InputState { start: true, ..input() }, 1);
     run(&mut g, input(), 3);
     assert!(g.frame > frame, "clock resumes after unpausing");
+}
+
+// Mario Bros: a box with enemies on top can be bumped from below.
+const BUMP_LEVEL: &[&str] = &["....E.......", "######......", "............", "..P.........", "############"];
+
+#[test]
+fn bumping_the_box_flips_the_enemy_and_the_box_bounces() {
+    let mut g = playing(BUMP_LEVEL);
+    run(&mut g, input(), 20);
+    // Line the enemy up on the tile the player stands under (col 2).
+    g.enemies[0].pos = Vec2::new(2.0 * TS + 1.0, TS - enemy::SIZE.y);
+    g.enemies[0].dir = -1.0;
+    g.player.pos.x = 35.0;
+    let flipped = run_until(&mut g, InputState { jump: true, ..input() }, 60, |g| {
+        matches!(g.enemies[0].state, EnemyState::Flipped(_))
+    });
+    assert!(flipped.is_some(), "enemy must be flipped by the head bump");
+    let hop = g.enemies[0].vel.y;
+    assert!(hop < -250.0, "it is launched high into the air (got {hop})");
+    assert_eq!(g.phase, Phase::Playing);
+    // The box itself bounces up and settles back.
+    let dipped = run_until(&mut g, input(), 20, |g| g.bumps.iter().any(|b| b.offset() > 2.0));
+    assert!(dipped.is_some(), "the box must dip under the bump");
+    run(&mut g, input(), 30);
+    assert!(g.bumps.is_empty(), "the box settles back");
+}
+
+#[test]
+fn enemies_off_the_bumped_tile_are_untouched() {
+    let mut g = playing(BUMP_LEVEL);
+    run(&mut g, input(), 20);
+    g.enemies[0].pos = Vec2::new(2.0 * TS + 1.0, TS - enemy::SIZE.y); // above the bump
+    g.enemies[0].dir = -1.0;
+    // A second patroller standing on the ground, far from the bump.
+    g.enemies.push(Enemy::spawn_at(Vec2::new(10.0 * TS + 8.0, 4.0 * TS)));
+    g.enemies[1].state = EnemyState::Walking;
+    g.enemies[1].dir = 1.0;
+    g.player.pos.x = 35.0;
+    run(&mut g, InputState { jump: true, ..input() }, 40);
+    assert!(matches!(g.enemies[0].state, EnemyState::Flipped(_)));
+    assert!(matches!(g.enemies[1].state, EnemyState::Walking), "far enemy keeps walking");
+}
+
+#[test]
+fn touching_a_flipped_enemy_kicks_it_out_safely() {
+    let mut g = playing(BUMP_LEVEL);
+    run(&mut g, input(), 20);
+    g.enemies[0].pos = Vec2::new(2.0 * TS + 1.0, TS - enemy::SIZE.y);
+    g.enemies[0].dir = -1.0;
+    g.player.pos.x = 35.0;
+    run_until(&mut g, InputState { jump: true, ..input() }, 60, |g| {
+        g.enemies[0].on_ground && matches!(g.enemies[0].state, EnemyState::Flipped(_))
+    })
+    .expect("enemy flipped and back on its platform");
+    // Touch it from the side on the platform: harmless, but it must be kicked out.
+    let e = g.enemies[0];
+    g.player.pos.x = e.pos.x - 6.0;
+    g.player.pos.y = e.pos.y + e.aabb().size.y - snes_wasm::world::player::HEIGHT_STAND;
+    let kicked = run_until(&mut g, input(), 30, |g| g.enemies[0].state == EnemyState::Knocked);
+    assert!(kicked.is_some(), "touching a flipped enemy kicks it out");
+    assert_eq!(g.phase, Phase::Playing, "a flipped enemy is harmless to the player");
+}
+
+#[test]
+fn a_flipped_enemy_evaporates_after_a_moment() {
+    let mut g = playing(BUMP_LEVEL);
+    run(&mut g, input(), 20);
+    g.enemies[0].pos = Vec2::new(2.0 * TS + 1.0, TS - enemy::SIZE.y);
+    g.enemies[0].dir = -1.0;
+    g.player.pos.x = 35.0;
+    run_until(&mut g, InputState { jump: true, ..input() }, 60, |g| {
+        matches!(g.enemies[0].state, EnemyState::Flipped(_))
+    })
+    .unwrap();
+    // It lands on its back, waits a moment, then: poof!
+    let on_back = run_until(&mut g, input(), 60, |g| g.enemies[0].on_ground);
+    assert!(on_back.is_some(), "it lands back on the box");
+    let gone = run_until(&mut g, input(), 120, |g| g.enemies[0].state == EnemyState::Dead);
+    assert!(gone.is_some(), "the flipped enemy must evaporate, never recover");
+    assert_eq!(g.enemies_alive(), 0);
+    assert!(
+        g.particles_list().iter().any(|p| p.kind == ParticleKind::Dust),
+        "a puff of particles marks the evaporation"
+    );
 }

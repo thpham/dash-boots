@@ -14,6 +14,7 @@ pub mod sim {
     pub mod fixed_timestep;
 }
 pub mod world {
+    pub mod bumps;
     pub mod camera;
     pub mod enemy;
     pub mod entities;

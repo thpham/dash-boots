@@ -3,6 +3,7 @@ use crate::input::{Buttons, InputState, InputTracker};
 use crate::math::Vec2;
 use crate::sim::fixed_timestep::FixedTimestep;
 use crate::tuning::{DT, TUNING as T};
+use crate::world::bumps::Bump;
 use crate::world::camera::Camera;
 use crate::world::enemy::{Enemy, EnemyState};
 use crate::world::entities::{Checkpoint, Coin, Goal, Pickup, Rift};
@@ -39,6 +40,8 @@ pub struct Game {
     pub pickups: Vec<Pickup>,
     pub checkpoints: Vec<Checkpoint>,
     pub rifts: Vec<Rift>,
+    /// Boxes currently bouncing from a head bump (Mario Bros).
+    pub bumps: Vec<Bump>,
     pub goal: Goal,
     pub particles: Particles,
     pub camera: Camera,
@@ -90,6 +93,7 @@ impl Game {
                 .map(|c| Checkpoint { feet: feet(*c), active: false, world: World::Past })
                 .collect(),
             rifts: data.spawns.rifts.iter().map(|r| Rift { feet: feet(*r), active: true }).collect(),
+            bumps: Vec::new(),
             respawn_world: World::Past,
             shift: Shift::new(World::Past),
             goal: Goal { feet: feet(data.spawns.goal) },
@@ -271,6 +275,7 @@ impl Game {
         }
         if ev.bumped {
             self.sfx(Sfx::Bump);
+            self.flip_enemies_bumped();
         }
         if ev.slide_started {
             self.particles.dust(pf, 0.0);
@@ -298,9 +303,20 @@ impl Game {
 
         // Wake enemies just before they scroll into view.
         let wake_x = self.camera.x + self.camera.view_w + 8.0;
+        let mut poofs = Vec::new();
         for e in &mut self.enemies {
+            let was_flipped = matches!(e.state, EnemyState::Flipped(_));
             e.step(&self.level, DT, wake_x);
+            if was_flipped && e.state == EnemyState::Dead {
+                // Poof: the flipped enemy evaporates where it was.
+                poofs.push(Vec2::new(e.pos.x + 7.0, e.pos.y + 7.0));
+            }
         }
+        for at in poofs {
+            self.particles.burst(ParticleKind::Dust, at, 10, 45.0, 0.5);
+            self.sfx(Sfx::Stomp);
+        }
+        self.update_bumps();
 
         self.player_vs_enemies(b, prev_bottom);
         if self.phase != Phase::Playing {
@@ -310,12 +326,63 @@ impl Game {
         self.particles.update(DT);
     }
 
+    /// Mario Bros: enemies standing on the box the player just bumped from
+    /// below get flipped onto their backs.
+    fn flip_enemies_bumped(&mut self) {
+        let ts = self.level.tile_size;
+        let p = self.player.aabb();
+        // Solid row the head hit: probe 1 px above the head, which is now
+        // snapped flush to the ceiling's underside.
+        let ty = ((p.top() - 1.0) / ts).floor() as i32;
+        let tx0 = (p.pos.x / ts).floor() as i32;
+        let tx1 = ((p.pos.x + p.size.x - 0.001) / ts).floor() as i32;
+        let (rx0, rx1) = (tx0 as f32 * ts, (tx1 + 1) as f32 * ts);
+        let ry = ty as f32 * ts;
+        for e in &mut self.enemies {
+            if e.state != EnemyState::Walking || !e.on_ground {
+                continue;
+            }
+            if (e.aabb().bottom() - ry).abs() > 2.0 {
+                continue;
+            }
+            let ea = e.aabb();
+            if ea.pos.x < rx1 && ea.pos.x + ea.size.x > rx0 {
+                e.flip();
+            }
+        }
+        // The box itself bounces; a new bump restarts one already in flight.
+        if let Some(b) = self.bumps.iter_mut().find(|b| b.covers(ty, tx0, tx1)) {
+            *b = Bump::new(ty, tx0, tx1);
+        } else {
+            self.bumps.push(Bump::new(ty, tx0, tx1));
+        }
+    }
+
+    /// Advance the box bounces (they settle back on their own).
+    fn update_bumps(&mut self) {
+        for b in &mut self.bumps {
+            b.step(DT);
+        }
+        self.bumps.retain(|b| b.t > 0.0);
+    }
+
     fn player_vs_enemies(&mut self, b: &Buttons, prev_bottom: f32) {
         let mut stomped = false;
         let mut hurt = false;
         for i in 0..self.enemies.len() {
             let e = self.enemies[i];
-            if !e.is_dangerous() || !self.player.aabb().overlaps(&e.aabb()) {
+            let overlapping = self.player.aabb().overlaps(&e.aabb());
+            // On its back (box bumped): harmless to touch, but any contact
+            // kicks it out of the level.
+            if matches!(e.state, EnemyState::Flipped(_)) && overlapping {
+                let center = Vec2::new(e.aabb().center_x(), e.pos.y + 7.0);
+                let dir = (e.aabb().center_x() - self.player.aabb().center_x()).signum();
+                self.enemies[i].knock(dir);
+                self.sfx(Sfx::Stomp);
+                self.particles.burst(ParticleKind::Star, center, 4, 60.0, 0.3);
+                continue;
+            }
+            if !e.is_dangerous() || !overlapping {
                 continue;
             }
             let center = Vec2::new(e.aabb().center_x(), e.pos.y + 7.0);

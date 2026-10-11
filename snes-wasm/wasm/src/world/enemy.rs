@@ -12,9 +12,12 @@ pub enum EnemyState {
     /// Waiting off-screen; wakes up when the camera gets close.
     Dormant,
     Walking,
+    /// Bumped from below (head bump on its tile): hops, lands on its back,
+    /// kicks away on touch, then gets up again.
+    Flipped(f32),
     /// Stomped: flat sprite for a moment, then gone.
     Squashed(f32),
-    /// Hit by a dash/slide: flips and falls off the screen.
+    /// Hit by a dash/slide/kick: flips and falls off the screen.
     Knocked,
     Dead,
 }
@@ -60,6 +63,12 @@ impl Enemy {
         self.vel = Vec2::new(from_dir * 90.0, -260.0);
     }
 
+    /// Forced hop and fall onto its back after the player bumped its tile.
+    pub fn flip(&mut self) {
+        self.state = EnemyState::Flipped(T.flip_time);
+        self.vel = Vec2::new(0.0, T.flip_hop_v);
+    }
+
     pub fn step(&mut self, level: &Level, dt: f32, wake_x: f32) {
         match self.state {
             EnemyState::Dormant => {
@@ -90,6 +99,21 @@ impl Enemy {
                 if self.pos.y > level.height_px() + 32.0 {
                     self.state = EnemyState::Dead;
                 }
+            }
+            EnemyState::Flipped(t) => {
+                self.anim += dt;
+                // Ballistic hop, no walking: gravity, bounce on the ground, done.
+                self.vel.x = 0.0;
+                self.vel.y = (self.vel.y + T.gravity_fall * 0.6 * dt).min(T.max_fall);
+                let hits = move_and_collide(level, &mut self.pos, SIZE, self.vel * dt);
+                if hits.down || hits.up {
+                    self.vel.y = 0.0;
+                }
+                self.on_ground = on_ground(level, self.pos, SIZE);
+                let t = t - dt;
+                // Never recovers: after a moment on its back, it evaporates
+                // (the game spawns the poof when it sees Dead here).
+                self.state = if t <= 0.0 { EnemyState::Dead } else { EnemyState::Flipped(t) };
             }
             EnemyState::Squashed(t) => {
                 let t = t - dt;

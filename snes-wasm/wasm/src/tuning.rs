@@ -41,6 +41,14 @@ pub struct Tuning {
     pub stomp_bounce: f32,
     pub stomp_bounce_held: f32,
     pub invuln_time: f32,
+    /// How long a box-bumped enemy (Mario Bros flip) lasts before evaporating.
+    pub flip_time: f32,
+    /// Upward speed of the flip launch after a head bump.
+    pub flip_hop_v: f32,
+    /// How long a bumped box bounces.
+    pub bump_time: f32,
+    /// How high a bumped box rises at the peak of its bounce.
+    pub bump_dip: f32,
 }
 
 pub const TUNING: Tuning = Tuning {
@@ -68,6 +76,10 @@ pub const TUNING: Tuning = Tuning {
     stomp_bounce: -280.0,
     stomp_bounce_held: -440.0,
     invuln_time: 1.6,
+    flip_time: 1.4,
+    flip_hop_v: -300.0,
+    bump_time: 0.18,
+    bump_dip: 4.0,
 };
 
 /// Simulation step (fixed 60 Hz).
