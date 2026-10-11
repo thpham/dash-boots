@@ -3,7 +3,7 @@ import { createRenderer } from './gl/renderer';
 
 // Note: wasm pkg import path will be wired up in a later task.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import { GameHandle, game_tick } from '../wasm/pkg/snes_wasm_wasm';
+import { GameHandle, game_tick } from '../wasm/pkg/snes_wasm';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('Missing #game canvas');
