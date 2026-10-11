@@ -1,5 +1,6 @@
 import { createInput } from './input/input';
 import { createRenderer } from './gl/renderer';
+import { loadLevel } from './levels/level_loader';
 
 // Note: wasm pkg import path will be wired up in a later task.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -10,6 +11,14 @@ if (!canvas) throw new Error('Missing #game canvas');
 
 const input = createInput();
 const renderer = createRenderer(canvas);
+
+loadLevel('/levels/level1.json')
+  .then((level) => {
+    console.log('level loaded', level);
+  })
+  .catch((err) => {
+    console.error('failed to load level', err);
+  });
 
 const game = new GameHandle();
 
