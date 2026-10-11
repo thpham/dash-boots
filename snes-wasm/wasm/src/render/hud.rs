@@ -53,7 +53,7 @@ fn draw_title(g: &Game, r: &mut RenderList) {
         "SPACE/K/Z     JUMP (HOLD = HIGHER)",
         "SHIFT/J/X     RUN  (+ DASH W/ BOOTS)",
         "DOWN/S        CROUCH / SLIDE",
-        "ENTER         PAUSE     M  MUTE",
+        "ENTER  PAUSE   M  MUTE   C  CRT",
     ];
     for (i, l) in lines.iter().enumerate() {
         r.text_shadow(34.0, panel_y + 2.0 + i as f32 * 12.0, l, WHITE, 1.0);

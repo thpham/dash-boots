@@ -58,8 +58,8 @@ try {
   const shot = (name: string) => canvas.screenshot({ path: `${OUT}/${name}.png` });
 
   const dims = await canvas.evaluate((c: HTMLCanvasElement) => [c.width, c.height, c.clientWidth, c.clientHeight]);
-  check(dims[0] === 320 && dims[1] === 180, 'canvas renders at native 320x180');
-  check(dims[2] % 320 === 0 && dims[2] / 320 === dims[3] / 180, `integer CSS scaling (${dims[2]}x${dims[3]})`);
+  check(dims[0] % 320 === 0 && dims[0] / 320 === dims[1] / 180, `canvas is an integer multiple of 320x180 (${dims[0]}x${dims[1]})`);
+  check(dims[2] === dims[0] && dims[3] === dims[1], 'CSS size matches device pixels at dpr 1');
 
   const title = await shot('01-title');
   await page.keyboard.press('Enter');

@@ -3,8 +3,9 @@
 
 import initWasm, { GameHandle, music_names, sfx_names } from '../wasm/pkg/snes_wasm';
 import { createAudio } from './platform/audio';
-import { Renderer, type TextureSpec } from './platform/gl';
+import { Executor, type TextureSpec } from './platform/gl/executor';
 import { createInput } from './platform/input';
+import type { FrameData } from './platform/plan';
 
 const VIEW_W = 320;
 const VIEW_H = 180;
@@ -39,10 +40,10 @@ async function main() {
   if (!canvas) throw new Error('Missing #game canvas');
 
   const [wasm, levelJson] = await Promise.all([initWasm(), fetchText(`${BASE}levels/level1.json`)]);
-  const renderer = new Renderer(canvas, VIEW_W, VIEW_H);
+  const executor = new Executor(canvas);
   const game = new GameHandle(levelJson, VIEW_W, VIEW_H);
 
-  const sizes = await Promise.all(TEXTURES.map((t) => renderer.loadTexture(t)));
+  const sizes = await executor.loadTextures(TEXTURES);
   TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
 
   const audio = createAudio(BASE, sfx_names(), music_names());
@@ -52,8 +53,14 @@ async function main() {
   const unlock = () => audio.unlock();
   window.addEventListener('keydown', unlock);
   window.addEventListener('pointerdown', unlock);
+  let crt = true;
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyM' && !e.repeat) audio.toggleMute();
+    if (e.repeat) return;
+    if (e.code === 'KeyM') audio.toggleMute();
+    if (e.code === 'KeyC') {
+      crt = !crt;
+      game.set_crt_enabled(crt);
+    }
   });
 
   const pause = () => {
@@ -64,8 +71,12 @@ async function main() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pause();
   });
-  window.addEventListener('resize', () => renderer.resize());
-  renderer.resize();
+  const resize = () => {
+    const { w, h } = executor.resize();
+    game.set_viewport(w, h);
+  };
+  window.addEventListener('resize', resize);
+  resize();
 
   document.querySelector<HTMLElement>('#status')!.hidden = true;
   canvas.hidden = false;
@@ -78,16 +89,17 @@ async function main() {
     audio.handle(game.take_audio_events());
     // Views are re-created every frame: WASM memory may grow and move.
     const mem = wasm.memory.buffer;
-    renderer.draw(
-      new Float32Array(mem, game.vertices_ptr(), game.vertices_len()),
-      new Uint32Array(mem, game.batches_ptr(), game.batches_len()),
-      true,
-    );
-    renderer.draw(
-      new Float32Array(mem, game.hud_vertices_ptr(), game.hud_vertices_len()),
-      new Uint32Array(mem, game.hud_batches_ptr(), game.hud_batches_len()),
-      false,
-    );
+    const frameData: FrameData = {
+      retroVerts: new Float32Array(mem, game.vertices_ptr(), game.vertices_len()),
+      retroBatches: new Uint32Array(mem, game.batches_ptr(), game.batches_len()),
+      hudVerts: new Float32Array(mem, game.hud_vertices_ptr(), game.hud_vertices_len()),
+      hudBatches: new Uint32Array(mem, game.hud_batches_ptr(), game.hud_batches_len()),
+      plan: new Float32Array(mem, game.plan_ptr(), game.plan_len()),
+      blocks: new Float32Array(mem, game.blocks_ptr(), game.blocks_len()),
+      billboards: new Float32Array(mem, game.billboards_ptr(), game.billboards_len()),
+      shadows: new Float32Array(mem, game.shadows_ptr(), game.shadows_len()),
+    };
+    executor.render(frameData);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
