@@ -1,4 +1,4 @@
-use snes_wasm::tuning::TUNING;
+use snes_wasm::TUNING;
 
 #[test]
 fn jump_velocity_is_negative() {
