@@ -10,6 +10,7 @@ use crate::sprites::{self, Frame};
 pub mod camera3d;
 pub mod hud;
 pub mod retro;
+pub mod scene3d;
 
 pub const TEX_BG_FAR: u32 = 0;
 pub const TEX_BG_NEAR: u32 = 1;
