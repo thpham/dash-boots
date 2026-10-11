@@ -16,12 +16,14 @@ export class FutureRenderer {
   private billboards: Billboards;
   private bloom: Bloom;
   private black: WebGLTexture;
+  private linear = false;
 
   constructor(
     private gl: WebGL2RenderingContext,
     private tex: (id: number) => WebGLTexture | undefined,
     private tilesetSize: [number, number],
     private spritesSize: [number, number],
+    private canvasH: () => number,
   ) {
     // NEAREST: at low focus the future looks pixelated; it sharpens as the resolution rises.
     this.target = createTarget(gl, 320, 180, true, gl.NEAREST);
@@ -37,6 +39,18 @@ export class FutureRenderer {
     const p = f.plan;
     if (p[PLAN.WORLD_MIX] <= 0) return { color: this.black, bloom: this.black };
     resizeTarget(gl, this.target, p[PLAN.FUTURE_W], p[PLAN.FUTURE_H]);
+    // Past half of the canvas: the big integer-ish pixelated scaling keeps
+    // NEAREST. Once the target exceeds half the canvas height the upscale is
+    // an arbitrary factor, so point sampling would shimmer — go LINEAR. This
+    // also covers the bloom pass, which point-sampled the target before.
+    const linear = p[PLAN.FUTURE_H] > this.canvasH() * 0.5;
+    if (linear !== this.linear) {
+      this.linear = linear;
+      const filter = linear ? gl.LINEAR : gl.NEAREST;
+      gl.bindTexture(gl.TEXTURE_2D, this.target.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    }
     bindTarget(gl, this.target, 0, 0);
     gl.clearColor(FOG[0], FOG[1], FOG[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);

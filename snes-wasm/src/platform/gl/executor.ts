@@ -117,7 +117,7 @@ export class Executor {
   /** Create the 3D passes. On any failure the game stays in the past (spec §9). */
   enableFuture(tilesetSize: [number, number], spritesSize: [number, number]): boolean {
     try {
-      this.future = new FutureRenderer(this.gl, (id) => this.textures[id], tilesetSize, spritesSize);
+      this.future = new FutureRenderer(this.gl, (id) => this.textures[id], tilesetSize, spritesSize, () => this.canvasH);
       this.futureReady = true;
     } catch (err) {
       console.warn('3D future disabled, staying in the past:', err);
