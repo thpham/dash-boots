@@ -15,7 +15,10 @@ pub struct InputState {
     pub down: bool,
     pub jump: bool,
     pub dash: bool,
+
+    #[serde(default)]
     pub prev_jump: bool,
+    #[serde(default)]
     pub prev_dash: bool,
 }
 
