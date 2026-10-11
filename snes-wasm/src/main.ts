@@ -12,7 +12,7 @@ const VIEW_W = 320;
 const VIEW_H = 180;
 const BASE = import.meta.env.BASE_URL;
 
-// Texture ids must match wasm/src/render.rs (TEX_*).
+// Texture ids must match wasm/src/render/mod.rs (TEX_*).
 const TEXTURES: TextureSpec[] = [
   { id: 0, url: `${BASE}assets/bg_far.png`, repeatX: true },
   { id: 1, url: `${BASE}assets/bg_near.png`, repeatX: true },
