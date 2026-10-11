@@ -6,7 +6,9 @@ pub struct Vec2 {
     pub y: f32,
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Default, Debug, Serialize, Deserialize)]
 pub struct InputState {
     pub left: bool,
     pub right: bool,

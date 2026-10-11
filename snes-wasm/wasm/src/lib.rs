@@ -11,6 +11,7 @@ mod world {
 pub use tuning::{Tuning, TUNING};
 
 use events::{FrameEvents, SpriteDraw};
+use serde_wasm_bindgen;
 use wasm_bindgen::prelude::*;
 use world::player::{InputState, Player};
 
@@ -38,17 +39,8 @@ impl GameHandle {
 }
 
 #[wasm_bindgen]
-pub fn game_tick(game: &mut GameHandle) -> JsValue {
-    // Minimal: no JS input wired yet; keep player stepping deterministic.
-    let input = InputState {
-        left: false,
-        right: false,
-        down: false,
-        jump: false,
-        dash: false,
-        prev_jump: false,
-        prev_dash: false,
-    };
+pub fn game_tick(game: &mut GameHandle, input_js: JsValue) -> JsValue {
+    let input: InputState = serde_wasm_bindgen::from_value(input_js).unwrap_or_default();
     let dt = 1.0 / 60.0;
 
     let mut sfx: Vec<&'static str> = Vec::new();

@@ -53,12 +53,10 @@ async function main() {
   const game = new GameHandle();
 
   function raf() {
-    const state = input.poll();
-    // TODO: pass to WASM later
-    void state;
+  const state = input.poll();
 
-    renderer.resizeToDisplaySize();
-    const frame = game_tick(game);
+  renderer.resizeToDisplaySize();
+  const frame = game_tick(game, state as any);
     for (const sfx of frame.sfx) audio.playSfx(sfx);
     renderer.render(frame);
 
