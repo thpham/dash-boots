@@ -11,6 +11,8 @@ pub const FUTURE_FOV_DEG: f32 = 60.0;
 pub const FUTURE_DISTANCE: f32 = 150.0;
 pub const FUTURE_LOOK_AHEAD: f32 = 64.0;
 pub const FUTURE_TARGET_UP: f32 = 24.0;
+/// Feet placement in the 2D view; must match `world::camera::Camera::FEET_Y`.
+pub const FEET_Y_FRACTION: f32 = crate::world::camera::Camera::FEET_Y;
 pub const NEAR: f32 = 4.0;
 pub const FAR: f32 = 2400.0;
 
@@ -41,7 +43,11 @@ pub fn pivot_camera(cam2d: Vec2, view_w: f32, view_h: f32, hero_feet: Vec2, pivo
     let distance = lerp(past_distance, FUTURE_DISTANCE, u);
 
     let past_target = to_world(Vec2::new(cam2d.x + view_w * 0.5, cam2d.y + view_h * 0.5), 0.0);
-    let future_target = to_world(hero_feet + Vec2::new(FUTURE_LOOK_AHEAD, -FUTURE_TARGET_UP), 0.0);
+    // The future target stands on the ground line of the (smoothed, death-frozen)
+    // 2D view — the hero's feet would dive under the floor while dying and hop
+    // on every jump, but the 2D camera does neither.
+    let feet_y = cam2d.y + view_h * FEET_Y_FRACTION;
+    let future_target = to_world(Vec2::new(hero_feet.x + FUTURE_LOOK_AHEAD, feet_y - FUTURE_TARGET_UP), 0.0);
     let target = past_target.lerp(future_target, u);
 
     let yaw = (FINAL_YAW_DEG * u).to_radians();

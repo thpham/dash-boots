@@ -16,7 +16,8 @@ impl Camera {
     }
 
     /// Feet should sit at this fraction of the screen height.
-    const FEET_Y: f32 = 0.72;
+    /// Public so the 3D camera's future target can use the same placement.
+    pub const FEET_Y: f32 = 0.72;
     const DEADZONE_LEFT: f32 = 0.38;
     const DEADZONE_RIGHT: f32 = 0.48;
 
