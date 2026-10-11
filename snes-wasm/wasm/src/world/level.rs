@@ -49,12 +49,12 @@ impl Level {
 
     pub fn is_solid_at_pixel(&self, x: f32, y: f32) -> bool {
         if x < 0.0 || y < 0.0 {
-            return false;
+            return true;
         }
         let tx = (x / self.tile_size).floor() as i32;
         let ty = (y / self.tile_size).floor() as i32;
         if tx < 0 || ty < 0 || tx >= self.width as i32 || ty >= self.height as i32 {
-            return false;
+            return true;
         }
         let idx = (ty as u32 * self.width + tx as u32) as usize;
         self.collision.get(idx).copied().unwrap_or(0) != 0
