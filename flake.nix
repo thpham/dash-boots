@@ -21,6 +21,7 @@
             rustfmt
             clippy
             wasm-pack
+            lld
           ];
 
           shellHook = ''
