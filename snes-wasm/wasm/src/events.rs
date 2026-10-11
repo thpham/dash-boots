@@ -22,6 +22,7 @@ pub struct Camera {
 pub struct TilemapRenderData {
     pub width: u32,
     pub height: u32,
+    #[serde(rename = "tileSize")]
     pub tile_size: f32,
     pub terrain: Vec<u16>,
     pub coins: Vec<u8>,

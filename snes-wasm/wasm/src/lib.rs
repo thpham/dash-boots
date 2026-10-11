@@ -189,8 +189,8 @@ pub fn game_tick(game: &mut GameHandle, input_js: JsValue) -> JsValue {
 
     // Camera: follow player, clamp to level bounds.
     // NOTE: viewport size is currently fixed to the canvas size used by the web renderer.
-    let viewport_w = 256.0;
-    let viewport_h = 224.0;
+    let viewport_w = 320.0;
+    let viewport_h = 180.0;
     let level_w_px = game.level.width as f32 * game.level.tile_size;
     let level_h_px = game.level.height as f32 * game.level.tile_size;
 
