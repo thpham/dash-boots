@@ -116,6 +116,7 @@ impl Game {
     pub fn start(&mut self) {
         self.set_phase(Phase::Playing);
         self.audio.push(AudioEvent::PlayMusic(MUSIC_LEVEL1));
+        self.audio.push(AudioEvent::MusicFuture(self.shift.world() == World::Future));
     }
 
     /// Pause if currently playing (host lost focus). No-op otherwise.

@@ -267,7 +267,9 @@ fn restart_after_visiting_the_future_is_back_in_the_past() {
     let mut g =
         playing(&["..........................", "..PR........G.............", "##########################"]);
     run_until(&mut g, InputState { right: true, ..input() }, 600, |g| g.phase == Phase::Won).unwrap();
+    g.drain_audio();
     g.restart();
+    assert!(g.drain_audio().contains(&AudioEvent::MusicFuture(false)), "host filter re-synced");
     assert_eq!(g.shift.state, ShiftState::Past);
     assert!(g.rifts.iter().all(|r| r.active));
     assert_eq!(g.shift.params(false).crt, snes_wasm::world::shift::CRT_BASE);
