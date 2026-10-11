@@ -1,5 +1,7 @@
 import { PLAN, type FrameData } from '../plan';
+import { Billboards } from './billboards';
 import { Blocks } from './blocks';
+import { Bloom } from './bloom';
 import { Environment } from './environment';
 import { bindTarget, createTarget, resizeTarget, solidTexture, type Target } from './util';
 
@@ -11,17 +13,22 @@ export class FutureRenderer {
   private target: Target;
   private blocks: Blocks;
   private env: Environment;
+  private billboards: Billboards;
+  private bloom: Bloom;
   private black: WebGLTexture;
 
   constructor(
     private gl: WebGL2RenderingContext,
     private tex: (id: number) => WebGLTexture | undefined,
     private tilesetSize: [number, number],
+    private spritesSize: [number, number],
   ) {
     // NEAREST: at low focus the future looks pixelated; it sharpens as the resolution rises.
     this.target = createTarget(gl, 320, 180, true, gl.NEAREST);
     this.blocks = new Blocks(gl);
     this.env = new Environment(gl);
+    this.billboards = new Billboards(gl);
+    this.bloom = new Bloom(gl);
     this.black = solidTexture(gl, [0, 0, 0, 255]);
   }
 
@@ -39,6 +46,12 @@ export class FutureRenderer {
     this.env.draw(viewProj, eye, p[PLAN.FLOOR_Y], p[PLAN.FOCUS_X], time, this.tex(TEX_BG_FAR));
     const tiles = this.tex(TEX_TILES);
     if (tiles) this.blocks.draw(f.blocks, viewProj, eye, tiles, this.tilesetSize, time, FOG);
-    return { color: this.target.tex, bloom: this.black };
+    const sprites = this.tex(3);
+    if (sprites && tiles) {
+      const camRight = p.subarray(PLAN.CAM_RIGHT, PLAN.CAM_RIGHT + 3);
+      this.billboards.draw(f.billboards, f.shadows, viewProj, camRight, eye, sprites, tiles, this.spritesSize, this.tilesetSize, time);
+    }
+    const bloom = this.bloom.apply(this.target);
+    return { color: this.target.tex, bloom };
   }
 }

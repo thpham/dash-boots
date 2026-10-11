@@ -45,8 +45,8 @@ async function main() {
 
   const sizes = await executor.loadTextures(TEXTURES);
   TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
-  const tiles = sizes[TEXTURES.findIndex((t) => t.id === 2)];
-  game.set_future_supported(executor.enableFuture([tiles.w, tiles.h]));
+  const size = (id: number) => sizes[TEXTURES.findIndex((t) => t.id === id)];
+  game.set_future_supported(executor.enableFuture([size(2).w, size(2).h], [size(3).w, size(3).h]));
 
   const audio = createAudio(BASE, sfx_names(), music_names());
   const input = createInput();
