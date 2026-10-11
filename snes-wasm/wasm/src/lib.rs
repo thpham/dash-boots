@@ -11,7 +11,7 @@ pub mod world {
 
 pub use tuning::{Tuning, TUNING};
 
-use events::{FrameEvents, SpriteDraw};
+use events::{Camera, FrameEvents, SpriteDraw, TilemapRenderData};
 use serde_wasm_bindgen;
 use wasm_bindgen::prelude::*;
 use world::player::{InputState, Player};
@@ -187,11 +187,34 @@ pub fn game_tick(game: &mut GameHandle, input_js: JsValue) -> JsValue {
         v1: 1.0,
     });
 
+    // Camera: follow player, clamp to level bounds.
+    // NOTE: viewport size is currently fixed to the canvas size used by the web renderer.
+    let viewport_w = 256.0;
+    let viewport_h = 224.0;
+    let level_w_px = game.level.width as f32 * game.level.tile_size;
+    let level_h_px = game.level.height as f32 * game.level.tile_size;
+
+    let mut cam_x = game.player.pos.x + 8.0 - viewport_w * 0.5;
+    let mut cam_y = game.player.pos.y + 8.0 - viewport_h * 0.5;
+
+    let max_x = (level_w_px - viewport_w).max(0.0);
+    let max_y = (level_h_px - viewport_h).max(0.0);
+    cam_x = cam_x.clamp(0.0, max_x);
+    cam_y = cam_y.clamp(0.0, max_y);
+
     let ev = FrameEvents {
         sprites,
         coin_count: game.entities.coin_count,
         won: game.entities.won,
         sfx: sfx.into_iter().map(|s| s.to_string()).collect(),
+        camera: Camera { x: cam_x, y: cam_y },
+        tilemap: TilemapRenderData {
+            width: game.level.width,
+            height: game.level.height,
+            tile_size: game.level.tile_size,
+            terrain: game.level.terrain.clone(),
+            coins: game.level.coins.clone(),
+        },
     };
 
     serde_wasm_bindgen::to_value(&ev).unwrap()

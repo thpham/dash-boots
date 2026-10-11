@@ -13,9 +13,26 @@ pub struct SpriteDraw {
 }
 
 #[derive(Serialize)]
+pub struct Camera {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Serialize)]
+pub struct TilemapRenderData {
+    pub width: u32,
+    pub height: u32,
+    pub tile_size: f32,
+    pub terrain: Vec<u16>,
+    pub coins: Vec<u8>,
+}
+
+#[derive(Serialize)]
 pub struct FrameEvents {
     pub sprites: Vec<SpriteDraw>,
     pub coin_count: u32,
     pub won: bool,
     pub sfx: Vec<String>,
+    pub camera: Camera,
+    pub tilemap: TilemapRenderData,
 }
