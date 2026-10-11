@@ -81,6 +81,17 @@ try {
   await page.waitForFunction(() => /Effects \d+%/.test(document.querySelector('#toast')?.textContent ?? ''), { timeout: 2_000 });
   check(true, 'V/B adjusts the SFX volume (no shift)');
 
+  // Render-ahead: the boot level's track gets pre-rendered while the title
+  // screen idles, so entering the level plays instantly (debug hook).
+  await page.waitForFunction(
+    () => {
+      const h = (window as unknown as { __dashboots?: { audio?: { debugMusicCache(): number[] } } }).__dashboots;
+      return !!h?.audio && h.audio.debugMusicCache().includes(0);
+    },
+    { timeout: 30_000 },
+  );
+  check(true, 'boot level track pre-rendered during the title screen (render-ahead)');
+
   await page.keyboard.press('Enter');
   await sleep(300);
   const start = await shot('02-playing');

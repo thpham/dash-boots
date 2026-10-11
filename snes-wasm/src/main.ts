@@ -158,6 +158,12 @@ async function main() {
   const audio = createAudio({ sfx: render_sfx });
   const input = createInput();
 
+  // Debug handle (e2e + in-page inspection): music cache state etc.
+  (window as unknown as { __dashboots?: { audio?: unknown } }).__dashboots = { audio };
+  // Pre-render the boot level's track while the title screen idles, so
+  // entering the level plays instantly.
+  audio.prerenderMusic(bootLevel.index >= 0 ? bootLevel.index : 0);
+
   // Clear screen done: the sim emitted LEVEL_CLEAR. Advance (or replay on the
   // last level and on standalone ?level= launches); save progress so a
   // refresh resumes at the right level.
@@ -170,6 +176,13 @@ async function main() {
     if (swapping) return;
     swapping = true;
     try {
+      // A finished campaign level is never replayed: drop its track (memory)
+      // and get the next level's music rendering during the swap — by the
+      // time the player reaches it, it plays instantly. The last level and
+      // standalone ?level= launches replay themselves, so they keep their
+      // track (never called for them: guarded by the checks above).
+      audio.forgetMusic(currentLevel);
+      audio.prerenderMusic(next);
       const built = await buildGame(next, LEVELS[next].name);
       currentLevel = next;
       game = built.handle;

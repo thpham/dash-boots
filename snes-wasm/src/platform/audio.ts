@@ -49,6 +49,13 @@ export type AudioHost = {
   adjustMusic(delta: number): number;
   /** Same for the effects bus. */
   adjustSfx(delta: number): number;
+  /** Pre-renders a track in the background (cached, played when wanted). */
+  prerenderMusic(id: number): void;
+  /** Drops a level's track from the cache. Campaign flow only: the call
+   * sites must know the level is finished and never replayed. */
+  forgetMusic(id: number): void;
+  /** Debug: ids currently in the music cache (e2e + in-page inspection). */
+  debugMusicCache(): number[];
 };
 
 /** Rendered in-wasm (see wasm/src/music/): stereo interleaved f32, 22050 Hz. */
@@ -91,7 +98,16 @@ export function createAudio(render: AudioRenderer): AudioHost {
     window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) {
     console.warn('WebAudio not supported: running silent');
-    return { unlock() {}, handle() {}, toggleMute: () => true, adjustMusic: () => MUSIC_VOLUME, adjustSfx: () => SFX_VOLUME };
+    return {
+      unlock() {},
+      handle() {},
+      toggleMute: () => true,
+      adjustMusic: () => MUSIC_VOLUME,
+      adjustSfx: () => SFX_VOLUME,
+      prerenderMusic() {},
+      forgetMusic() {},
+      debugMusicCache: () => [],
+    };
   }
 
   // Created early (suspended) so assets decode while the title screen shows.
@@ -155,7 +171,7 @@ export function createAudio(render: AudioRenderer): AudioHost {
     if (wanted === null || paused) return;
     const buf = music.get(wanted);
     if (!buf) {
-      beginRender(wanted);
+      beginRender(wanted, true);
       return;
     }
     source = ctx.createBufferSource();
@@ -167,14 +183,18 @@ export function createAudio(render: AudioRenderer): AudioHost {
     source.start(0, at);
   }
 
-  /** In-flight renders, keyed by track id (one task per track at a time). */
-  const rendering = new Map<number, MusicRenderTask>();
-  /** Per-tick stepping budget (ms): a step is <1 ms of simulation, so the
-   * game's rAF keeps painting while a multi-second render drains. */
-  const PUMP_BUDGET_MS = 4;
+  /** In-flight renders, keyed by track id (one task per track at a time).
+   * `brisk` is the pace: wanted tracks step at ~50% CPU, background
+   * pre-renders at ~10% so the game's rAF never feels them. */
+  const rendering = new Map<number, { task: MusicRenderTask; brisk: boolean }>();
 
-  function beginRender(id: number) {
-    if (rendering.has(id) || music.has(id)) return;
+  function beginRender(id: number, brisk: boolean) {
+    if (music.has(id)) return;
+    const cur = rendering.get(id);
+    if (cur) {
+      cur.brisk = cur.brisk || brisk; // promote on demand, never demote
+      return;
+    }
     let task: MusicRenderTask;
     try {
       task = new MusicRenderTask(id);
@@ -182,20 +202,22 @@ export function createAudio(render: AudioRenderer): AudioHost {
       console.warn('audio: music render failed', id, err);
       return;
     }
-    rendering.set(id, task);
+    rendering.set(id, { task, brisk });
     const pump = () => {
-      // superseded by a stop/other task: leave it to GC via free().
-      if (rendering.get(id) !== task) {
+      const entry = rendering.get(id);
+      // superseded (forgotten while rendering): free, drop it entirely.
+      if (!entry || entry.task !== task) {
         task.free();
         return;
       }
-      const deadline = performance.now() + PUMP_BUDGET_MS;
+      const budget = entry.brisk ? 4 : 2;
+      const deadline = performance.now() + budget;
       let done = false;
       while (!done && performance.now() < deadline) {
         done = task.step(4);
       }
       if (!done) {
-        setTimeout(pump, 4);
+        setTimeout(pump, budget);
         return;
       }
       rendering.delete(id);
@@ -214,7 +236,7 @@ export function createAudio(render: AudioRenderer): AudioHost {
       // former async fetch did).
       if (wanted === id && !paused) startMusic();
     };
-    setTimeout(pump, 4);
+    setTimeout(pump, brisk ? 4 : 16);
   }
 
   // SFX: rendered once at boot (short, synchronous, deterministic).
@@ -274,6 +296,17 @@ export function createAudio(render: AudioRenderer): AudioHost {
     },
     adjustSfx(delta) {
       return adjust('sfx', delta);
+    },
+    prerenderMusic(id) {
+      beginRender(id, false);
+    },
+    forgetMusic(id) {
+      rendering.get(id)?.task.free(); // no-op when already drained to the cache
+      rendering.delete(id);
+      music.delete(id);
+    },
+    debugMusicCache() {
+      return [...music.keys()].sort((a, b) => a - b);
     },
   };
 
