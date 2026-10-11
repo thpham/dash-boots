@@ -367,6 +367,50 @@ def draw_particles(cv, ox, oy):
             cv.set(bx + 3 + k, oy + 3 - k, st)
 
 
+# Rift: a crack of light that does not belong here (cold, translucent, glitchy).
+RIFT_CORE = C('#ffffff')
+RIFT_ICE = C('#c8f6ff')
+RIFT_CYAN = C('#48dcf4')
+RIFT_DEEP = C('#2a86c8', 220)
+RIFT_HALO = C('#48dcf4', 90)
+# Horizontal offset of the crack per row (fixed, so the crack is stable between frames).
+RIFT_PATH = [0, 0, 1, 1, 0, -1, -1, 0, 0, 1, 2, 1, 0, 0, -1, -1,
+             -1, 0, 1, 1, 0, 0, -1, -2, -1, 0, 0, 1, 1, 0, 0, 0]
+# Per frame: (row band displaced sideways, shift, shard pixels (x, y), core thinning).
+RIFT_FRAMES = [
+    ((9, 12), 2, [(3, 6), (12, 9), (2, 20), (13, 24), (11, 3)], False),
+    ((19, 21), -2, [(4, 11), (12, 16), (3, 27), (12, 2), (2, 15)], False),
+    ((25, 27), 1, [(12, 7), (3, 13), (13, 21), (2, 4), (11, 28)], True),
+]
+
+
+def draw_rift(cv, ox, oy, band, shift, shards, thin):
+    """16x32 rift frame: white core, ice/cyan edges, a translucent halo and loose pixel shards."""
+    for y in range(1, 32):
+        # Lens-shaped: widest in the middle, a single pixel at the tips.
+        hw = 0.5 + 1.5 * math.sin(math.pi * y / 32.0)
+        cx = 7.5 + RIFT_PATH[y] + (shift if band[0] <= y <= band[1] else 0)
+        for x in range(16):
+            d = abs(x + 0.5 - cx)
+            if d <= (0.5 if thin else 0.8) and hw > 0.9:
+                col = RIFT_CORE
+            elif d <= hw * 0.6:
+                col = RIFT_ICE
+            elif d <= hw * 0.9:
+                col = RIFT_CYAN
+            elif d <= hw + 0.5:
+                col = RIFT_DEEP
+            elif d <= hw + 1.5:
+                col = RIFT_HALO
+            else:
+                continue
+            cv.set(ox + x, oy + y, col)
+    for i, (x, y) in enumerate(shards):
+        cv.set(ox + x, oy + y, RIFT_CORE if i % 2 == 0 else RIFT_CYAN)
+        if i % 3 == 0:
+            cv.set(ox + x, oy + y + 1, RIFT_ICE)
+
+
 def build_sprites():
     cv = Canvas(256, 128)
     for i, f in enumerate(HERO_FRAMES):
@@ -383,6 +427,8 @@ def build_sprites():
     draw_checkpoint(cv, 32, 64, True, False)
     draw_checkpoint(cv, 48, 64, True, True)
     draw_particles(cv, 64, 64)
+    for i, fr in enumerate(RIFT_FRAMES):
+        draw_rift(cv, 16 + i * 16, 96, *fr)
     return cv
 
 

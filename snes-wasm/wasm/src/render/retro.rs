@@ -40,7 +40,7 @@ pub fn draw(g: &Game, r: &mut RenderList) {
     }
 }
 
-/// Every visible sprite in draw order: checkpoints, goal, coins, pickups, enemies, hero, particles.
+/// Every visible sprite in draw order: checkpoints, goal, active rifts, coins, pickups, enemies, hero, particles.
 pub fn world_sprites(g: &Game) -> Vec<WorldSprite> {
     let mut out = Vec::with_capacity(64);
     let fr = g.frame;
@@ -53,6 +53,14 @@ pub fn world_sprites(g: &Game) -> Vec<WorldSprite> {
         push(f, c.feet.x - 4.0, c.feet.y - 32.0, false, false, SpriteKind::Entity);
     }
     push(sprites::GOAL, g.goal.feet.x - 5.0, g.goal.feet.y - 48.0, false, false, SpriteKind::Entity);
+    for (i, r) in g.rifts.iter().enumerate() {
+        if r.active {
+            // Irregular flicker: frames hold 3..5 steps, offset per rift.
+            let k = (fr / 4 + fr / 7 + i as u64) % 3;
+            let f = sprites::RIFT[k as usize];
+            push(f, r.feet.x - f.w * 0.5, r.feet.y - f.h, false, false, SpriteKind::Entity);
+        }
+    }
     for (i, c) in g.coins.iter().enumerate() {
         if !c.collected {
             let f = sprites::COIN[((fr / 8 + i as u64 / 3) % 4) as usize];
