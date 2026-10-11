@@ -55,7 +55,9 @@ pub fn world_sprites(g: &Game) -> Vec<WorldSprite> {
     push(sprites::GOAL, g.goal.feet.x - 5.0, g.goal.feet.y - 48.0, false, false, SpriteKind::Entity);
     for (i, r) in g.rifts.iter().enumerate() {
         if r.active {
-            // Irregular flicker: frames hold 3..5 steps, offset per rift.
+            // Irregular flicker: the frame advances whenever `fr` is a
+            // multiple of 4 or of 7 (hold lengths of 1..4 steps, two
+            // advances as close as 1 step apart), shifted per rift.
             let k = (fr / 4 + fr / 7 + i as u64) % 3;
             let f = sprites::RIFT[k as usize];
             push(f, r.feet.x - f.w * 0.5, r.feet.y - f.h, false, false, SpriteKind::Entity);
