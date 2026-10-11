@@ -12,8 +12,13 @@ export function createInput(): { poll(): InputState } {
   window.addEventListener('keydown', (e) => {
     keys.add(e.code);
   });
-  window.addEventListener('keyup', (e) => {
-    keys.delete(e.code);
+  function clearKeys() {
+    keys.clear();
+  }
+
+  window.addEventListener('blur', clearKeys);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearKeys();
   });
 
   function pollKeyboard(): InputState {
