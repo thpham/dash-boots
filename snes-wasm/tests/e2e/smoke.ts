@@ -136,6 +136,24 @@ try {
   const t1 = await shot('14-future-b');
   check(!t0.equals(t1), 'game loop still running in the future (motes/scanlines animate)');
 
+  // The way back: keep walking right through the second rift (column 30, well
+  // before the goal at 56) until the world flips back to the retro look, then
+  // let the 1.8 s pivot finish and confirm the past is back.
+  await page.keyboard.down('ArrowRight');
+  let lumaBack = 0;
+  for (let i = 0; i < 20; i++) {
+    await sleep(400);
+    const png = await canvas.screenshot({ path: `${OUT}/15-walking-back.png` });
+    lumaBack = await meanLuma(png);
+    if (lumaBack > lumaFuture * 2) break;
+  }
+  await page.keyboard.up('ArrowRight');
+  await sleep(2000); // ToPast takes 1.8 s
+  const backToPast = await shot('15-back-to-past');
+  lumaBack = await meanLuma(backToPast);
+  check(lumaBack > lumaFuture * 2, `the past is back (luma ${lumaFuture.toFixed(0)} -> ${lumaBack.toFixed(0)})`);
+  check((await glError()) === 0, 'no WebGL error after the way back');
+
   check(problems.length === 0, `no console errors/warnings${problems.length ? `:\n${problems.join('\n')}` : ''}`);
   await browser.close();
   console.log(`screenshots in ${OUT}/`);

@@ -321,7 +321,8 @@ def print_map(L):
 
 
 def build_test_rift():
-    """Tiny flat level used by the e2e test: a rift right after the spawn."""
+    """Tiny flat level used by the e2e test: a rift right after the spawn, and
+    a second one far enough ahead that the e2e walks into the future and back."""
     global W
     saved_w = W
     W = 60
@@ -329,6 +330,7 @@ def build_test_rift():
     L.ground(0, W - 1)
     L.on_surface('player_spawn', 2)
     L.on_surface('rift', 5)
+    L.on_surface('rift', 30)
     L.on_surface('goal', 56, w=16, h=48)
     m = to_tiled(L)
     W = saved_w
