@@ -15,4 +15,6 @@ pub struct SpriteDraw {
 #[derive(Serialize)]
 pub struct FrameEvents {
     pub sprites: Vec<SpriteDraw>,
+    pub coin_count: u32,
+    pub won: bool,
 }
