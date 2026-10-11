@@ -15,10 +15,13 @@
         height: 100%;
         display: grid;
         place-items: center;
+        overflow: hidden;
       }
       canvas {
         image-rendering: pixelated;
         image-rendering: crisp-edges;
+        /* Avoid browser gestures selecting/scrolling the canvas. */
+        touch-action: none;
       }
     </style>
   </head>

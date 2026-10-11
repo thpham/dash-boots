@@ -12,6 +12,13 @@ if (!canvas) throw new Error('Missing #game canvas');
 
 const input = createInput();
 const renderer = createRenderer(canvas);
+
+function onResize() {
+  renderer.resizeToDisplaySize();
+}
+window.addEventListener('resize', onResize, { passive: true });
+// Initialize size once on boot.
+onResize();
 const audio = createAudio();
 
 let audioUnlockStarted = false;
@@ -47,7 +54,7 @@ function raf() {
   // TODO: pass to WASM later
   void state;
 
-  renderer.resize();
+  renderer.resizeToDisplaySize();
   const frame = game_tick(game);
   for (const sfx of frame.sfx) audio.playSfx(sfx);
   renderer.render(frame);
