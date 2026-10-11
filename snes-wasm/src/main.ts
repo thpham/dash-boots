@@ -48,11 +48,21 @@ async function main() {
   const level = await loadLevel('/levels/level1.json');
   game_load_level(game, level as any);
 
+  let prevJump = false;
+  let prevDash = false;
+
   function raf() {
     const state = input.poll();
+    const inputForWasm = {
+      ...state,
+      prev_jump: prevJump,
+      prev_dash: prevDash,
+    };
+    prevJump = state.jump;
+    prevDash = state.dash;
 
     renderer.resizeToDisplaySize();
-    const frame = game_tick(game, state as any);
+    const frame = game_tick(game, inputForWasm as any);
     for (const sfx of frame.sfx) audio.playSfx(sfx);
     renderer.render(frame);
 
