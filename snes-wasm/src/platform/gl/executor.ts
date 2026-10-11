@@ -1,5 +1,6 @@
 import { PLAN, type FrameData } from '../plan';
 import { Composite } from './composite';
+import { FutureRenderer } from './future';
 import { Sprites2D } from './sprites2d';
 import { bindTarget, createTarget, solidTexture, type Target } from './util';
 
@@ -15,6 +16,7 @@ export class Executor {
   private composite: Composite;
   private past: Target;
   private black: WebGLTexture;
+  private future: FutureRenderer | null = null;
   private canvasW = VIEW_W;
   private canvasH = VIEW_H;
   /** True once the 3D passes are created successfully (Task 9). */
@@ -110,8 +112,20 @@ export class Executor {
     this.sprites.draw(f.hudVerts, f.hudBatches, this.textures, VIEW_W, VIEW_H);
   }
 
-  /** Overridden in Task 9; until then the future is black. */
-  protected renderFuture(_f: FrameData): { color: WebGLTexture; bloom: WebGLTexture } {
-    return { color: this.black, bloom: this.black };
+  /** Create the 3D passes. On any failure the game stays in the past (spec §9). */
+  enableFuture(tilesetSize: [number, number]): boolean {
+    try {
+      this.future = new FutureRenderer(this.gl, (id) => this.textures[id], tilesetSize);
+      this.futureReady = true;
+    } catch (err) {
+      console.warn('3D future disabled, staying in the past:', err);
+      this.future = null;
+      this.futureReady = false;
+    }
+    return this.futureReady;
+  }
+
+  protected renderFuture(f: FrameData): { color: WebGLTexture; bloom: WebGLTexture } {
+    return this.future ? this.future.render(f) : { color: this.black, bloom: this.black };
   }
 }
