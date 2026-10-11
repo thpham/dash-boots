@@ -71,3 +71,25 @@ fn base64_layers_are_rejected_with_hint() {
 fn invalid_json_is_reported() {
     assert!(parse_tiled_json("{ nope").unwrap_err().contains("invalid JSON"));
 }
+
+#[test]
+fn parses_rift_objects() {
+    let text = r#"{
+  "orientation": "orthogonal", "infinite": false, "width": 10, "height": 2,
+  "tilewidth": 16, "tileheight": 16,
+  "tilesets": [{ "firstgid": 1, "columns": 8, "name": "tiles" }],
+  "layers": [
+    { "name": "terrain", "type": "tilelayer", "width": 10, "height": 2, "data": [0,0,0,0,0,0,0,0,0,0, 2,2,2,2,2,2,2,2,2,2] },
+    { "name": "collision", "type": "tilelayer", "width": 10, "height": 2, "data": [0,0,0,0,0,0,0,0,0,0, 1,1,1,1,1,1,1,1,1,1] },
+    { "name": "coins", "type": "tilelayer", "width": 10, "height": 2, "data": [0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0] },
+    { "name": "objects", "type": "objectgroup", "objects": [
+      { "type": "player_spawn", "x": 0, "y": 0, "width": 16, "height": 16 },
+      { "type": "goal", "x": 144, "y": 0, "width": 16, "height": 16 },
+      { "class": "rift", "x": 16, "y": 0, "width": 16, "height": 16 }
+    ] }
+  ]
+}"#;
+    let d = parse_tiled_json(text).unwrap();
+    assert_eq!(d.spawns.rifts.len(), 1);
+    assert_eq!((d.spawns.rifts[0].x, d.spawns.rifts[0].y), (24.0, 16.0));
+}

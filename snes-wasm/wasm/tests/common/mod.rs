@@ -8,7 +8,7 @@ use snes_wasm::world::level::{LevelData, SpawnPoint, Spawns};
 pub const TS: f32 = 16.0;
 
 /// Build a level from ASCII art. `#` solid, `o` coin, `P` player, `E` enemy,
-/// `G` goal, `C` checkpoint, `B` dash boots. Spawns use the cell's feet point.
+/// `G` goal, `C` checkpoint, `B` dash boots, `R` rift. Spawns use the cell's feet point.
 /// Without `G`, the goal is placed at the far right bottom (out of the way).
 pub fn level(rows: &[&str]) -> LevelData {
     let h = rows.len() as u32;
@@ -20,6 +20,7 @@ pub fn level(rows: &[&str]) -> LevelData {
     let mut enemies = vec![];
     let mut checkpoints = vec![];
     let mut dash_boots = vec![];
+    let mut rifts = vec![];
     for (ty, row) in rows.iter().enumerate() {
         assert_eq!(row.len() as u32, w, "ragged row {ty}");
         for (tx, ch) in row.chars().enumerate() {
@@ -33,6 +34,7 @@ pub fn level(rows: &[&str]) -> LevelData {
                 'G' => goal = Some(feet),
                 'C' => checkpoints.push(feet),
                 'B' => dash_boots.push(feet),
+                'R' => rifts.push(feet),
                 _ => {}
             }
         }
@@ -51,6 +53,7 @@ pub fn level(rows: &[&str]) -> LevelData {
             enemies,
             checkpoints,
             dash_boots,
+            rifts,
         },
     }
 }

@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+/// Columns of flat, enemy-free ground required to the right of a rift.
+pub const RIFT_RUNWAY_TILES: i32 = 6;
+
 /// Compact runtime level produced by the TypeScript Tiled loader
 /// (`src/levels/level_loader.ts`). Extra fields (terrain, tileset) are ignored here.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,6 +40,9 @@ pub struct Spawns {
     pub checkpoints: Vec<SpawnPoint>,
     #[serde(default)]
     pub dash_boots: Vec<SpawnPoint>,
+    /// Past ↔ future shift triggers (spec "Mémoire vive" §7).
+    #[serde(default)]
+    pub rifts: Vec<SpawnPoint>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -65,6 +71,35 @@ impl LevelData {
         }
         if self.tileset_columns == 0 {
             return Err("tileset has zero columns".into());
+        }
+        for (i, r) in self.spawns.rifts.iter().enumerate() {
+            self.check_rift_runway(r).map_err(|e| format!("rift #{i} at ({}, {}): {e}", r.x, r.y))?;
+        }
+        Ok(())
+    }
+
+    fn solid(&self, tx: i32, ty: i32) -> bool {
+        if tx < 0 || ty < 0 || tx >= self.width as i32 || ty >= self.height as i32 {
+            return false;
+        }
+        self.collision[ty as usize * self.width as usize + tx as usize] != 0
+    }
+
+    fn check_rift_runway(&self, r: &SpawnPoint) -> Result<(), String> {
+        let ts = self.tile_size;
+        let col = (r.x / ts).floor() as i32;
+        // The rift stands on top of this row.
+        let ground = (r.y / ts).round() as i32;
+        for c in col + 1..=col + RIFT_RUNWAY_TILES {
+            if !self.solid(c, ground) || self.solid(c, ground - 1) {
+                return Err(format!(
+                    "column {c} is not flat ground at row {ground} (needs {RIFT_RUNWAY_TILES} flat tiles to the right)"
+                ));
+            }
+        }
+        let (x0, x1) = ((col + 1) as f32 * ts, (col + 1 + RIFT_RUNWAY_TILES) as f32 * ts);
+        if let Some(e) = self.spawns.enemies.iter().find(|e| e.x >= x0 && e.x < x1) {
+            return Err(format!("enemy spawn at x={} inside the {RIFT_RUNWAY_TILES}-tile runway", e.x));
         }
         Ok(())
     }

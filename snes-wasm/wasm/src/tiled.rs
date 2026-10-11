@@ -4,7 +4,7 @@
 //! - orthogonal, finite map, square tiles, CSV (array) layer data
 //! - tile layers `terrain` (visuals), `collision` (gid > 0 = solid), `coins` (gid > 0 = coin)
 //! - object layer `objects` with objects whose class/type (or name) is one of
-//!   `player_spawn` (required), `goal` (required), `enemy_spawn`, `checkpoint`, `dash_boots`
+//!   `player_spawn` (required), `goal` (required), `enemy_spawn`, `checkpoint`, `dash_boots`, `rift`
 //!
 //! Errors are explicit so a drifting export fails loudly instead of producing a broken level.
 
@@ -148,6 +148,7 @@ pub fn parse_tiled_json(text: &str) -> Result<LevelData, String> {
             enemies: of_kind("enemy_spawn"),
             checkpoints: of_kind("checkpoint"),
             dash_boots: of_kind("dash_boots"),
+            rifts: of_kind("rift"),
         },
     };
     data.validate().map_err(|e| format!("Tiled map: {e}"))?;
