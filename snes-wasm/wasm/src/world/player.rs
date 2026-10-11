@@ -1,4 +1,4 @@
-use crate::tuning::TUNING;
+use crate::{tuning::TUNING, world::level::Level};
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Vec2 {
@@ -37,7 +37,7 @@ impl Player {
         }
     }
 
-    pub fn step(&mut self, input: &InputState, dt: f32) -> Vec<&'static str> {
+    pub fn step(&mut self, input: &InputState, level: &Level, dt: f32) -> Vec<&'static str> {
         let mut sfx = Vec::new();
         let dir = (input.right as i32 - input.left as i32) as f32;
         let accel = if self.on_ground {
@@ -64,8 +64,55 @@ impl Player {
         }
 
         self.vel.y += TUNING.gravity * dt;
+
+        // Move + resolve collisions (X then Y).
+        let size = Vec2 { x: 16.0, y: 16.0 };
+
+        // X axis.
         self.pos.x += self.vel.x * dt;
+        if self.vel.x > 0.0 {
+            let right = self.pos.x + size.x;
+            let top = self.pos.y;
+            let bottom = self.pos.y + size.y - 0.001;
+            if level.is_solid_at_pixel(right, top) || level.is_solid_at_pixel(right, bottom) {
+                let tile_x = (right / level.tile_size).floor();
+                self.pos.x = tile_x * level.tile_size - size.x;
+                self.vel.x = 0.0;
+            }
+        } else if self.vel.x < 0.0 {
+            let left = self.pos.x;
+            let top = self.pos.y;
+            let bottom = self.pos.y + size.y - 0.001;
+            if level.is_solid_at_pixel(left, top) || level.is_solid_at_pixel(left, bottom) {
+                let tile_x = (left / level.tile_size).floor();
+                self.pos.x = (tile_x + 1.0) * level.tile_size;
+                self.vel.x = 0.0;
+            }
+        }
+
+        // Y axis.
         self.pos.y += self.vel.y * dt;
+        self.on_ground = false;
+        if self.vel.y > 0.0 {
+            let bottom = self.pos.y + size.y;
+            let left = self.pos.x;
+            let right = self.pos.x + size.x - 0.001;
+            if level.is_solid_at_pixel(left, bottom) || level.is_solid_at_pixel(right, bottom) {
+                let tile_y = (bottom / level.tile_size).floor();
+                self.pos.y = tile_y * level.tile_size - size.y;
+                self.vel.y = 0.0;
+                self.on_ground = true;
+            }
+        } else if self.vel.y < 0.0 {
+            let top = self.pos.y;
+            let left = self.pos.x;
+            let right = self.pos.x + size.x - 0.001;
+            if level.is_solid_at_pixel(left, top) || level.is_solid_at_pixel(right, top) {
+                let tile_y = (top / level.tile_size).floor();
+                self.pos.y = (tile_y + 1.0) * level.tile_size;
+                self.vel.y = 0.0;
+            }
+        }
 
         sfx
     }

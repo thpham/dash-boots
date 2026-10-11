@@ -3,7 +3,7 @@ mod sim {
     pub mod fixed_timestep;
 }
 mod tuning;
-mod world {
+pub mod world {
     pub mod entities;
     pub mod level;
     pub mod player;
@@ -62,7 +62,7 @@ pub fn game_tick(game: &mut GameHandle, input_js: JsValue) -> JsValue {
     let mut sfx: Vec<&'static str> = Vec::new();
 
     if !game.entities.won {
-        sfx = game.player.step(&input, dt);
+        sfx = game.player.step(&input, &game.level, dt);
 
         // Enemy patrol update.
         for e in &mut game.entities.enemies {
