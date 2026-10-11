@@ -5,6 +5,7 @@ mod sim {
 mod tuning;
 mod world {
     pub mod entities;
+    pub mod level;
     pub mod player;
 }
 
@@ -20,6 +21,7 @@ pub struct GameHandle {
     player: Player,
     entities: world::entities::Entities,
     spawn_player_pos: world::player::Vec2,
+    level: world::level::Level,
 }
 
 #[wasm_bindgen]
@@ -34,8 +36,22 @@ impl GameHandle {
             player,
             entities: world::entities::Entities::new_hardcoded(),
             spawn_player_pos,
+            level: world::level::Level {
+                width: 0,
+                height: 0,
+                tile_size: 16.0,
+                collision: Vec::new(),
+                terrain: Vec::new(),
+                coins: Vec::new(),
+            },
         }
     }
+}
+
+#[wasm_bindgen]
+pub fn game_load_level(game: &mut GameHandle, level_js: JsValue) {
+    let level: world::level::LevelData = serde_wasm_bindgen::from_value(level_js).unwrap();
+    game.level = world::level::Level::from_data(level);
 }
 
 #[wasm_bindgen]
