@@ -8,7 +8,10 @@ out vec4 o;
 void main() {
   vec3 c = texture(u_src, v_uv).rgb;
   float l = max(max(c.r, c.g), c.b);
-  o = vec4(c * smoothstep(0.45, 0.9, l), 1.0);
+  // Only cool/hologram light may bloom: holograms are cyan (b > r), while the
+  // hero's warm pixels (skin) have r > b and must keep their true colors.
+  float cool = smoothstep(0.0, 0.15, c.b - c.r);
+  o = vec4(c * smoothstep(0.45, 0.9, l) * cool, 1.0);
 }`;
 
 const BLUR_FS = `#version 300 es
