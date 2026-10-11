@@ -92,6 +92,22 @@ try {
   await page.keyboard.press('c');
   await sleep(200);
 
+  const meanLuma = (png: Buffer) =>
+    page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      return sum / (d.length / 4);
+    }, png.toString('base64'));
+
   const glError = () =>
     page.evaluate(() => (document.querySelector('#game') as HTMLCanvasElement).getContext('webgl2')!.getError());
 
@@ -111,6 +127,9 @@ try {
   await page.keyboard.up('ArrowRight');
   const future = await shot('12-future');
   check(!beforeRift.equals(midShift) && !midShift.equals(future), 'the rift transforms the image over time');
+  const lumaBefore = await meanLuma(beforeRift);
+  const lumaFuture = await meanLuma(future);
+  check(lumaFuture < lumaBefore * 0.5, `the future is a dark void (luma ${lumaBefore.toFixed(0)} -> ${lumaFuture.toFixed(0)})`);
   check((await glError()) === 0, 'no WebGL error after the shift and a resize');
   const t0 = await shot('13-future-a');
   await sleep(300);
