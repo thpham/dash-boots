@@ -7,6 +7,7 @@
 use crate::game::Game;
 use crate::sprites::{self, Frame};
 
+pub mod camera3d;
 pub mod hud;
 pub mod retro;
 
