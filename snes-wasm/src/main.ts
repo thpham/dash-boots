@@ -5,7 +5,8 @@ import initWasm, { GameHandle, music_names, sfx_names } from '../wasm/pkg/snes_w
 import { createAudio } from './platform/audio';
 import { Executor, type TextureSpec } from './platform/gl/executor';
 import { createInput } from './platform/input';
-import type { FrameData } from './platform/plan';
+import { FutureCap } from './platform/perf';
+import { PLAN, type FrameData } from './platform/plan';
 
 const VIEW_W = 320;
 const VIEW_H = 180;
@@ -53,6 +54,11 @@ async function main() {
   TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
   const size = (id: number) => sizes[TEXTURES.findIndex((t) => t.id === id)];
   game.set_future_supported(executor.enableFuture([size(2).w, size(2).h], [size(3).w, size(3).h]));
+
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  game.set_reduced_motion(motion.matches);
+  motion.addEventListener('change', () => game.set_reduced_motion(motion.matches));
+  const cap = new FutureCap((h) => game.set_max_future_height(h));
 
   const audio = createAudio(BASE, sfx_names(), music_names());
   const input = createInput();
@@ -108,6 +114,7 @@ async function main() {
       shadows: new Float32Array(mem, game.shadows_ptr(), game.shadows_len()),
     };
     executor.render(frameData);
+    cap.sample(dt, frameData.plan[PLAN.WORLD_MIX] > 0);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
