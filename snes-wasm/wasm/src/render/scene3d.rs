@@ -66,8 +66,13 @@ pub fn build_scene(g: &Game, params: &ShiftParams, s: &mut Scene3d) {
     let ts = d.tile_size;
     let hero = g.player.feet();
     let (htx, hty) = ((hero.x / ts).floor() as i32, (hero.y / ts).floor() as i32);
-    let x0 = (htx - VISIBLE_BEHIND_TILES).max(0);
-    let x1 = (htx + VISIBLE_AHEAD_TILES).min(d.width as i32 - 1);
+    // The 2D camera's view must be fully covered: at the swap it shows up to
+    // ~0.48 * view_w ≈ 10 columns behind the hero, past VISIBLE_BEHIND_TILES.
+    let cam = g.camera.pixel_pos();
+    let view_left = (cam.x / ts).floor() as i32;
+    let view_right = ((cam.x + g.camera.view_w) / ts).floor() as i32;
+    let x0 = (htx - VISIBLE_BEHIND_TILES).min(view_left).max(0);
+    let x1 = (htx + VISIBLE_AHEAD_TILES).max(view_right).min(d.width as i32 - 1);
 
     for ty in 0..d.height as i32 {
         for tx in x0..=x1 {

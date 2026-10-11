@@ -28,6 +28,33 @@ fn only_blocks_near_the_camera_are_sent() {
 }
 
 #[test]
+fn every_column_of_the_2d_view_is_in_the_scene_at_the_swap() {
+    // At the 2D->3D swap the 2D camera shows up to ~10 columns behind the hero
+    // (deadzone up to 0.48 * 320 px), past VISIBLE_BEHIND_TILES. The ground
+    // strip must not be missing there.
+    let w = 60;
+    let mut rows = vec![".".repeat(w); 3];
+    rows[0].replace_range(30..31, "P");
+    rows[2] = "#".repeat(w);
+    let rows: Vec<&str> = rows.iter().map(|s| s.as_str()).collect();
+    let mut g = playing(&rows);
+    let feet = g.player.feet();
+    g.camera.x = feet.x - 153.0; // hero sits just inside the right deadzone edge
+    let ts = TS;
+    let mut s = Scene3d::default();
+    build_scene(&g, &future_params(), &mut s);
+    let first = (g.camera.x / ts).floor() as i32;
+    let last = ((g.camera.x + g.camera.view_w) / ts).floor() as i32;
+    let mut present: Vec<i32> = Vec::new();
+    for b in s.blocks.chunks(BLOCK_FLOATS) {
+        present.push(((b[0] / ts) - 0.5).floor() as i32); // block centre x -> column
+    }
+    for c in first..=last {
+        assert!(present.contains(&c), "ground missing in column {c} ({first}..={last} visible)");
+    }
+}
+
+#[test]
 fn ground_blocks_form_a_road_and_extrude_with_the_wave() {
     let rows = long_level();
     let rows: Vec<&str> = rows.iter().map(|s| s.as_str()).collect();
