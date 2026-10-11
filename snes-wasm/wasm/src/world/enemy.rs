@@ -1,0 +1,108 @@
+use crate::math::{Aabb, Vec2};
+use crate::tuning::TUNING as T;
+use crate::world::level::Level;
+use crate::world::physics::{move_and_collide, on_ground};
+
+pub const SIZE: Vec2 = Vec2::new(14.0, 14.0);
+pub const SPEED: f32 = 32.0;
+const SQUASH_TIME: f32 = 0.5;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EnemyState {
+    /// Waiting off-screen; wakes up when the camera gets close.
+    Dormant,
+    Walking,
+    /// Stomped: flat sprite for a moment, then gone.
+    Squashed(f32),
+    /// Hit by a dash/slide: flips and falls off the screen.
+    Knocked,
+    Dead,
+}
+
+/// "Grumble": walks, falls with gravity, turns around at walls and ledges.
+#[derive(Clone, Copy, Debug)]
+pub struct Enemy {
+    pub pos: Vec2,
+    pub vel: Vec2,
+    pub dir: f32,
+    pub state: EnemyState,
+    pub on_ground: bool,
+    pub anim: f32,
+}
+
+impl Enemy {
+    pub fn spawn_at(feet: Vec2) -> Self {
+        Self {
+            pos: Vec2::new(feet.x - SIZE.x * 0.5, feet.y - SIZE.y),
+            vel: Vec2::default(),
+            dir: -1.0,
+            state: EnemyState::Dormant,
+            on_ground: false,
+            anim: 0.0,
+        }
+    }
+
+    pub fn aabb(&self) -> Aabb {
+        Aabb::new(self.pos.x, self.pos.y, SIZE.x, SIZE.y)
+    }
+
+    /// Can hurt or be stomped by the player.
+    pub fn is_dangerous(&self) -> bool {
+        self.state == EnemyState::Walking
+    }
+
+    pub fn squash(&mut self) {
+        self.state = EnemyState::Squashed(SQUASH_TIME);
+    }
+
+    pub fn knock(&mut self, from_dir: f32) {
+        self.state = EnemyState::Knocked;
+        self.vel = Vec2::new(from_dir * 90.0, -260.0);
+    }
+
+    pub fn step(&mut self, level: &Level, dt: f32, wake_x: f32) {
+        match self.state {
+            EnemyState::Dormant => {
+                if self.pos.x < wake_x {
+                    self.state = EnemyState::Walking;
+                }
+            }
+            EnemyState::Walking => {
+                self.anim += dt;
+                // Turn around at ledges (only when grounded, so they still fall
+                // if spawned mid-air).
+                if self.on_ground {
+                    let ahead_x = if self.dir > 0.0 { self.pos.x + SIZE.x + 1.0 } else { self.pos.x - 1.0 };
+                    if !level.is_solid_at_pixel(ahead_x, self.pos.y + SIZE.y + 1.0) {
+                        self.dir = -self.dir;
+                    }
+                }
+                self.vel.x = self.dir * SPEED;
+                self.vel.y = (self.vel.y + T.gravity_fall * dt).min(T.max_fall);
+                let hits = move_and_collide(level, &mut self.pos, SIZE, self.vel * dt);
+                if hits.left || hits.right {
+                    self.dir = -self.dir;
+                }
+                if hits.down || hits.up {
+                    self.vel.y = 0.0;
+                }
+                self.on_ground = on_ground(level, self.pos, SIZE);
+                if self.pos.y > level.height_px() + 32.0 {
+                    self.state = EnemyState::Dead;
+                }
+            }
+            EnemyState::Squashed(t) => {
+                let t = t - dt;
+                self.state = if t <= 0.0 { EnemyState::Dead } else { EnemyState::Squashed(t) };
+            }
+            EnemyState::Knocked => {
+                self.vel.y = (self.vel.y + T.gravity_fall * 0.6 * dt).min(T.max_fall);
+                self.pos = self.pos + self.vel * dt;
+                if self.pos.y > level.height_px() + 64.0 {
+                    self.state = EnemyState::Dead;
+                }
+            }
+            EnemyState::Dead => {}
+        }
+    }
+}

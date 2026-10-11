@@ -2,3 +2,6 @@
 result
 result-*
 .nix-*
+
+# OS
+.DS_Store

@@ -16,12 +16,22 @@
           packages = with pkgs; [
             just
             nodejs_24
+            # Rust → WASM
             cargo
             rustc
             rustfmt
             clippy
-            wasm-pack
             lld
+            wasm-pack
+            # Must match the `wasm-bindgen` version pinned in snes-wasm/wasm/Cargo.toml
+            # so wasm-pack uses it instead of downloading one.
+            wasm-bindgen-cli
+            binaryen # wasm-opt
+            # Asset generators (stdlib only)
+            python3
+          ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+            # Headless browser for `just e2e`
+            chromium
           ];
 
           shellHook = ''

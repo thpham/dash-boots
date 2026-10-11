@@ -1,25 +1,59 @@
 set dotenv-load := true
 
+web := "snes-wasm"
+crate := "snes-wasm/wasm"
+
 # List available tasks
 _default:
   @just --list
 
-# Install JS deps
+# Install JS deps (only if missing)
 install:
-  cd snes-wasm && npm install
+  cd {{web}} && [ -d node_modules ] || npm ci
 
-# Run dev server
-dev:
-  cd snes-wasm && npm run dev
+# Regenerate the original art and audio (stdlib-only Python)
+assets:
+  cd {{web}} && python3 tools/gen_art.py && python3 tools/gen_audio.py
 
-# Build WASM package (web target)
+# Regenerate public/levels/level1.json (overwrites edits made in Tiled!)
+level:
+  cd {{web}} && python3 tools/gen_level.py
+
+# Build the WASM package (web target) into snes-wasm/wasm/pkg
 wasm-build:
-  cd snes-wasm/wasm && wasm-pack build --target web --out-dir ../wasm/pkg
+  cd {{crate}} && wasm-pack build --release --target web --out-dir pkg
 
-# Run Rust tests
+# Run Rust tests (physics, rules, Tiled parser, bot playthrough of level1)
 wasm-test:
-  cd snes-wasm/wasm && cargo test
+  cd {{crate}} && cargo test
 
-# Build web bundle
-build:
-  cd snes-wasm && npm run build
+# Run the dev server (http://localhost:5173)
+dev: install wasm-build
+  cd {{web}} && npm run dev
+
+# Production build into snes-wasm/dist
+build: install wasm-build
+  cd {{web}} && npm run build
+
+# Build then serve the production bundle (http://localhost:4173)
+serve: build
+  cd {{web}} && npm run preview
+
+# Headless-browser smoke test against the production build
+e2e: build
+  cd {{web}} && npm run e2e
+
+# Format Rust code
+fmt:
+  cd {{crate}} && cargo fmt
+
+# Lint: rustfmt check, clippy (warnings = errors), TypeScript typecheck
+lint: install wasm-build
+  cd {{crate}} && cargo fmt --check && cargo clippy --all-targets -- -D warnings
+  cd {{web}} && npm run typecheck
+
+# Everything: lint, unit tests, build, browser smoke test
+check: lint wasm-test e2e
+
+# Alias kept from the original plan
+test: wasm-test

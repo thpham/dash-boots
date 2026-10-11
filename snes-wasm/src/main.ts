@@ -1,76 +1,93 @@
-import { createInput } from './input/input';
-import { createRenderer } from './gl/renderer';
-import { loadLevel } from './levels/level_loader';
-import { createAudio } from './audio/audio';
+// Browser host. All game logic, level parsing and render-list building live in
+// the Rust/WASM core; this file only wires the platform: assets, input, GL, audio.
 
-// Note: wasm pkg import path will be wired up in a later task.
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
-import initWasm, { GameHandle, game_tick, game_load_level } from '../wasm/pkg/snes_wasm';
+import initWasm, { GameHandle, music_names, sfx_names } from '../wasm/pkg/snes_wasm';
+import { createAudio } from './platform/audio';
+import { Renderer, type TextureSpec } from './platform/gl';
+import { createInput } from './platform/input';
 
-const canvas = document.querySelector<HTMLCanvasElement>('#game');
-if (!canvas) throw new Error('Missing #game canvas');
+const VIEW_W = 320;
+const VIEW_H = 180;
+const BASE = import.meta.env.BASE_URL;
 
-const input = createInput();
-const renderer = createRenderer(canvas);
+// Texture ids must match wasm/src/render.rs (TEX_*).
+const TEXTURES: TextureSpec[] = [
+  { id: 0, url: `${BASE}assets/bg_far.png`, repeatX: true },
+  { id: 1, url: `${BASE}assets/bg_near.png`, repeatX: true },
+  { id: 2, url: `${BASE}assets/tiles.png` },
+  { id: 3, url: `${BASE}assets/sprites.png` },
+  { id: 4, url: `${BASE}assets/font.png` },
+];
 
-function onResize() {
-  renderer.resizeToDisplaySize();
-}
-window.addEventListener('resize', onResize, { passive: true });
-// Initialize size once on boot.
-onResize();
-const audio = createAudio();
-
-let audioUnlockStarted = false;
-async function unlockAudioOnce() {
-  if (audioUnlockStarted) return;
-  audioUnlockStarted = true;
-  try {
-    await audio.unlock();
-  } catch (err) {
-    console.warn('audio unlock failed', err);
+function showError(message: string) {
+  const el = document.querySelector<HTMLElement>('#status');
+  if (el) {
+    el.textContent = message;
+    el.classList.add('error');
+    el.hidden = false;
   }
 }
 
-function installAudioUnlockListeners() {
-  const opts: AddEventListenerOptions = { once: true, passive: true };
-  window.addEventListener('pointerdown', unlockAudioOnce, opts);
-  window.addEventListener('keydown', unlockAudioOnce, opts);
+async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load ${url}: HTTP ${res.status}`);
+  return res.text();
 }
-installAudioUnlockListeners();
-
 
 async function main() {
-  await initWasm();
+  const canvas = document.querySelector<HTMLCanvasElement>('#game');
+  if (!canvas) throw new Error('Missing #game canvas');
 
-  const game = new GameHandle();
+  const [wasm, levelJson] = await Promise.all([initWasm(), fetchText(`${BASE}levels/level1.json`)]);
+  const renderer = new Renderer(canvas, VIEW_W, VIEW_H);
+  const game = new GameHandle(levelJson, VIEW_W, VIEW_H);
 
-  const level = await loadLevel('/levels/level1.json');
-  game_load_level(game, level as any);
+  const sizes = await Promise.all(TEXTURES.map((t) => renderer.loadTexture(t)));
+  TEXTURES.forEach((t, i) => game.set_texture_size(t.id, sizes[i].w, sizes[i].h));
 
-  let prevJump = false;
-  let prevDash = false;
+  const audio = createAudio(BASE, sfx_names(), music_names());
+  const input = createInput();
 
-  function raf() {
-    const state = input.poll();
-    const inputForWasm = {
-      ...state,
-      prev_jump: prevJump,
-      prev_dash: prevDash,
-    };
-    prevJump = state.jump;
-    prevDash = state.dash;
+  // Browsers only allow audio after a user gesture.
+  const unlock = () => audio.unlock();
+  window.addEventListener('keydown', unlock);
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM' && !e.repeat) audio.toggleMute();
+  });
 
-    renderer.resizeToDisplaySize();
-    const frame = game_tick(game, inputForWasm as any);
-    for (const sfx of frame.sfx) audio.playSfx(sfx);
-    renderer.render(frame);
+  const pause = () => {
+    input.reset();
+    game.pause();
+  };
+  window.addEventListener('blur', pause);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pause();
+  });
+  window.addEventListener('resize', () => renderer.resize());
+  renderer.resize();
 
-    requestAnimationFrame(raf);
-  }
-  requestAnimationFrame(raf);
+  document.querySelector<HTMLElement>('#status')!.hidden = true;
+  canvas.hidden = false;
+
+  let last = performance.now();
+  const frame = (now: number) => {
+    const dt = now - last;
+    last = now;
+    game.frame(input.poll(), dt);
+    audio.handle(game.take_audio_events());
+    // Views are re-created every frame: WASM memory may grow and move.
+    const mem = wasm.memory.buffer;
+    renderer.draw(
+      new Float32Array(mem, game.vertices_ptr(), game.vertices_len()),
+      new Uint32Array(mem, game.batches_ptr(), game.batches_len()),
+    );
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 
-main().catch((err) => {
-  console.error('fatal init error', err);
+main().catch((err: unknown) => {
+  console.error(err);
+  showError(err instanceof Error ? err.message : String(err));
 });
