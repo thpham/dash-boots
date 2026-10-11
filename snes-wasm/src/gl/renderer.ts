@@ -1,3 +1,5 @@
+import { buildVisibleTileSprites } from './tilemap';
+
 export type SpriteDraw = {
   x: number;
   y: number;
@@ -9,11 +11,26 @@ export type SpriteDraw = {
   v1: number;
 };
 
+export type Camera = {
+  x: number;
+  y: number;
+};
+
+export type TilemapRenderData = {
+  width: number;
+  height: number;
+  tileSize: number;
+  terrain: number[];
+  coins: number[];
+};
+
 export type FrameEvents = {
   sprites: SpriteDraw[];
   coin_count: number;
   won: boolean;
   sfx: string[];
+  camera: Camera;
+  tilemap: TilemapRenderData;
 };
 
 const BASE_WIDTH = 320;
@@ -162,6 +179,25 @@ void main() {
     texReady = true;
   };
 
+  const tilesTexture = gl.createTexture();
+  if (!tilesTexture) throw new Error('Failed to create tiles texture');
+  gl.bindTexture(gl.TEXTURE_2D, tilesTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  let tilesReady = false;
+  const tilesImg = new Image();
+  tilesImg.src = '/assets/tiles.png';
+  tilesImg.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, tilesTexture);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tilesImg);
+    tilesReady = true;
+  };
+
   function resizeToDisplaySize() {
     const maxW = Math.max(1, window.innerWidth);
     const maxH = Math.max(1, window.innerHeight);
@@ -197,11 +233,29 @@ void main() {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(uTex, 0);
 
-    // If texture isn't ready yet, still draw with placeholder pixel.
+    // If textures aren't ready yet, still draw with placeholder pixels.
     void texReady;
+    void tilesReady;
 
+    // --- Tilemap (behind sprites) ---
+    gl.bindTexture(gl.TEXTURE_2D, tilesTexture);
+    const tiles = buildVisibleTileSprites(frame.tilemap, {
+      viewportW: BASE_WIDTH,
+      viewportH: BASE_HEIGHT,
+      cameraX: frame.camera.x,
+      cameraY: frame.camera.y,
+    });
+    for (const t of tiles) {
+      gl.uniform2f(uTranslate, t.x, t.y);
+      gl.uniform2f(uSize, t.w, t.h);
+      gl.uniform4f(uUvRect, t.u0, t.v0, t.u1, t.v1);
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    }
+
+    // --- Sprites ---
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     for (const s of frame.sprites) {
-      gl.uniform2f(uTranslate, s.x, s.y);
+      gl.uniform2f(uTranslate, s.x - frame.camera.x, s.y - frame.camera.y);
       gl.uniform2f(uSize, s.w, s.h);
       gl.uniform4f(uUvRect, s.u0, s.v0, s.u1, s.v1);
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
