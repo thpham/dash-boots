@@ -1,6 +1,7 @@
 import { createInput } from './input/input';
 import { createRenderer } from './gl/renderer';
 import { loadLevel } from './levels/level_loader';
+import { createAudio } from './audio/audio';
 
 // Note: wasm pkg import path will be wired up in a later task.
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -11,6 +12,25 @@ if (!canvas) throw new Error('Missing #game canvas');
 
 const input = createInput();
 const renderer = createRenderer(canvas);
+const audio = createAudio();
+
+let audioUnlockStarted = false;
+async function unlockAudioOnce() {
+  if (audioUnlockStarted) return;
+  audioUnlockStarted = true;
+  try {
+    await audio.unlock();
+  } catch (err) {
+    console.warn('audio unlock failed', err);
+  }
+}
+
+function installAudioUnlockListeners() {
+  const opts: AddEventListenerOptions = { once: true, passive: true };
+  window.addEventListener('pointerdown', unlockAudioOnce, opts);
+  window.addEventListener('keydown', unlockAudioOnce, opts);
+}
+installAudioUnlockListeners();
 
 loadLevel('/levels/level1.json')
   .then((level) => {
@@ -29,6 +49,7 @@ function raf() {
 
   renderer.resize();
   const frame = game_tick(game);
+  for (const sfx of frame.sfx) audio.playSfx(sfx);
   renderer.render(frame);
 
   requestAnimationFrame(raf);

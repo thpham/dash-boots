@@ -11,6 +11,9 @@ export type SpriteDraw = {
 
 export type FrameEvents = {
   sprites: SpriteDraw[];
+  coin_count: number;
+  won: boolean;
+  sfx: string[];
 };
 
 export function createRenderer(canvas: HTMLCanvasElement): {

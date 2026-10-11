@@ -17,4 +17,5 @@ pub struct FrameEvents {
     pub sprites: Vec<SpriteDraw>,
     pub coin_count: u32,
     pub won: bool,
+    pub sfx: Vec<String>,
 }

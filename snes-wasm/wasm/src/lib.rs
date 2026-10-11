@@ -40,11 +40,21 @@ impl GameHandle {
 #[wasm_bindgen]
 pub fn game_tick(game: &mut GameHandle) -> JsValue {
     // Minimal: no JS input wired yet; keep player stepping deterministic.
-    let input = InputState::default();
+    let input = InputState {
+        left: false,
+        right: false,
+        down: false,
+        jump: false,
+        dash: false,
+        prev_jump: false,
+        prev_dash: false,
+    };
     let dt = 1.0 / 60.0;
 
+    let mut sfx: Vec<&'static str> = Vec::new();
+
     if !game.entities.won {
-        game.player.step(&input, dt);
+        sfx = game.player.step(&input, dt);
 
         // Enemy patrol update.
         for e in &mut game.entities.enemies {
@@ -173,6 +183,7 @@ pub fn game_tick(game: &mut GameHandle) -> JsValue {
         sprites,
         coin_count: game.entities.coin_count,
         won: game.entities.won,
+        sfx: sfx.into_iter().map(|s| s.to_string()).collect(),
     };
 
     serde_wasm_bindgen::to_value(&ev).unwrap()
