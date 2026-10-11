@@ -51,6 +51,9 @@ pub struct GameHandle {
     retro: render::RenderList,
     hud: render::RenderList,
     audio: Vec<u8>,
+    scene: render::scene3d::Scene3d,
+    plan: [f32; render::plan::PLAN_LEN],
+    settings: render::plan::RenderSettings,
 }
 
 #[wasm_bindgen]
@@ -65,6 +68,9 @@ impl GameHandle {
             retro: render::RenderList::new(w, h),
             hud: render::RenderList::new(w, h),
             audio: Vec::new(),
+            scene: Default::default(),
+            plan: [0.0; render::plan::PLAN_LEN],
+            settings: Default::default(),
         })
     }
 
@@ -79,7 +85,57 @@ impl GameHandle {
         let steps = self.game.advance(input::InputState::from_bits(buttons), dt_ms / 1000.0);
         self.audio.extend(self.game.drain_audio().into_iter().map(|e| e.code()));
         render::draw_game(&self.game, &mut self.retro, &mut self.hud);
+        let params = render::plan::effective_params(&self.game, &self.settings);
+        if params.world_mix > 0.0 {
+            render::scene3d::build_scene(&self.game, &params, &mut self.scene);
+        } else {
+            self.scene.clear();
+        }
+        render::plan::build_plan(&self.game, &self.settings, &params, &mut self.plan);
         steps
+    }
+
+    pub fn plan_ptr(&self) -> *const f32 {
+        self.plan.as_ptr()
+    }
+    pub fn plan_len(&self) -> usize {
+        self.plan.len()
+    }
+    pub fn blocks_ptr(&self) -> *const f32 {
+        self.scene.blocks.as_ptr()
+    }
+    pub fn blocks_len(&self) -> usize {
+        self.scene.blocks.len()
+    }
+    pub fn billboards_ptr(&self) -> *const f32 {
+        self.scene.billboards.as_ptr()
+    }
+    pub fn billboards_len(&self) -> usize {
+        self.scene.billboards.len()
+    }
+    pub fn shadows_ptr(&self) -> *const f32 {
+        self.scene.shadows.as_ptr()
+    }
+    pub fn shadows_len(&self) -> usize {
+        self.scene.shadows.len()
+    }
+
+    /// Canvas size in device pixels.
+    pub fn set_viewport(&mut self, w: u32, h: u32) {
+        self.settings.canvas_w = w.max(320) as f32;
+        self.settings.canvas_h = h.max(180) as f32;
+    }
+    pub fn set_future_supported(&mut self, on: bool) {
+        self.settings.future_supported = on;
+    }
+    pub fn set_max_future_height(&mut self, px: u32) {
+        self.settings.max_future_h = px.max(180) as f32;
+    }
+    pub fn set_reduced_motion(&mut self, on: bool) {
+        self.settings.reduced_motion = on;
+    }
+    pub fn set_crt_enabled(&mut self, on: bool) {
+        self.settings.crt_enabled = on;
     }
 
     pub fn vertices_ptr(&self) -> *const f32 {

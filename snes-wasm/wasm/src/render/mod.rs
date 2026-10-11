@@ -9,6 +9,7 @@ use crate::sprites::{self, Frame};
 
 pub mod camera3d;
 pub mod hud;
+pub mod plan;
 pub mod retro;
 pub mod scene3d;
 
