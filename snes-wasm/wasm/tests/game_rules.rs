@@ -274,3 +274,16 @@ fn restart_after_visiting_the_future_is_back_in_the_past() {
     assert!(g.rifts.iter().all(|r| r.active));
     assert_eq!(g.shift.params(false).crt, snes_wasm::world::shift::CRT_BASE);
 }
+
+#[test]
+fn animation_clock_stops_while_paused() {
+    let mut g = playing(&["..P.o..", "#######"]);
+    run(&mut g, input(), 5);
+    g.pause();
+    let frame = g.frame;
+    run(&mut g, input(), 30);
+    assert_eq!(g.frame, frame, "paused frames must not advance the animation clock");
+    run(&mut g, InputState { start: true, ..input() }, 1);
+    run(&mut g, input(), 3);
+    assert!(g.frame > frame, "clock resumes after unpausing");
+}

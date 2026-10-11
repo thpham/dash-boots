@@ -189,8 +189,6 @@ impl Game {
 
     /// One fixed simulation step.
     pub fn update(&mut self, b: &Buttons) {
-        self.frame += 1;
-
         if self.paused {
             if b.start_pressed {
                 self.paused = false;
@@ -198,6 +196,7 @@ impl Game {
             }
             return;
         }
+        self.frame += 1;
         self.phase_time += DT;
         if self.phase != Phase::Title {
             self.shift.step();
