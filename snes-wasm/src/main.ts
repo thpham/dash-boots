@@ -1,24 +1,27 @@
 import { createInput } from './input/input';
+import { createRenderer } from './gl/renderer';
+
+// Note: wasm pkg import path will be wired up in a later task.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { GameHandle, game_tick } from '../wasm/pkg/snes_wasm_wasm';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('Missing #game canvas');
 
-const ctx = canvas.getContext('2d');
-if (!ctx) throw new Error('Missing 2D context');
-
 const input = createInput();
+const renderer = createRenderer(canvas);
 
-let t = 0;
+const game = new GameHandle();
+
 function raf() {
   const state = input.poll();
   // TODO: pass to WASM later
   void state;
 
-  t += 1;
-  ctx.fillStyle = '#101018';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#7cf';
-  ctx.fillRect(10 + (t % 100), 20, 16, 16);
+  renderer.resize();
+  const frame = game_tick(game);
+  renderer.render(frame);
+
   requestAnimationFrame(raf);
 }
 requestAnimationFrame(raf);
