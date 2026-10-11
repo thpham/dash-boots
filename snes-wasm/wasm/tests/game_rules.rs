@@ -5,6 +5,7 @@ use snes_wasm::audio::{AudioEvent, Sfx};
 use snes_wasm::game::{Game, Phase};
 use snes_wasm::input::InputState;
 use snes_wasm::world::enemy::EnemyState;
+use snes_wasm::world::shift::{ShiftState, World};
 
 #[test]
 fn title_screen_waits_for_start() {
@@ -181,4 +182,93 @@ fn restarting_with_enter_held_does_not_pause_the_new_game() {
     run(&mut g, InputState { start: true, ..input() }, 5);
     assert_eq!(g.phase, Phase::Playing);
     assert!(!g.paused, "held Enter must not count as a second press");
+}
+
+const RIFT_LEVEL: &[&str] =
+    &["..............................", "..PR......C....R..............", "#########################..###"];
+
+#[test]
+fn touching_a_rift_shifts_to_the_future_once() {
+    let mut g = playing(RIFT_LEVEL);
+    g.drain_audio();
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 60, |g| g.shift.is_shifting()).expect("rift triggers");
+    assert_eq!(g.shift.world(), World::Future);
+    assert!(!g.rifts[0].active, "single use");
+    let audio = g.drain_audio();
+    assert!(audio.contains(&AudioEvent::Sfx(Sfx::Rift)));
+    assert!(audio.contains(&AudioEvent::MusicFuture(true)));
+}
+
+#[test]
+fn rift_touched_while_shifting_is_ignored_and_stays_active() {
+    let mut g = playing(&["..............", "..PRR.........", "##############"]);
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 60, |g| g.shift.is_shifting()).unwrap();
+    run_until(&mut g, right, 60, |g| g.player.pos.x > 4.0 * TS + 8.0).unwrap();
+    assert!(g.rifts[1].active);
+    assert!(matches!(g.shift.state, ShiftState::ToFuture(_)));
+}
+
+#[test]
+fn second_rift_brings_back_the_past() {
+    let mut g = playing(&[
+        "..................................",
+        "..PR.....................R........",
+        "##################################",
+    ]);
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 600, |g| !g.rifts[1].active).expect("second rift");
+    assert_eq!(g.shift.world(), World::Past);
+    assert!(g.drain_audio().contains(&AudioEvent::Sfx(Sfx::Return)));
+}
+
+#[test]
+fn checkpoint_remembers_the_future_and_respawn_reactivates_later_rifts() {
+    let mut g = playing(RIFT_LEVEL);
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 900, |g| g.phase == Phase::Dying).expect("falls in the pit");
+    assert_eq!(g.checkpoints[0].world, World::Future);
+    run_until(&mut g, input(), 200, |g| g.phase == Phase::Playing).unwrap();
+    assert_eq!(g.shift.state, ShiftState::Future, "respawn settled in the checkpoint's world");
+    assert!(!g.rifts[0].active, "rift before the checkpoint stays used");
+    assert!(g.rifts[1].active, "rift after the checkpoint is back");
+}
+
+#[test]
+fn pausing_freezes_the_shift() {
+    let mut g = playing(RIFT_LEVEL);
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 60, |g| g.shift.is_shifting()).unwrap();
+    run(&mut g, input(), 10);
+    g.pause();
+    let frozen = g.shift.state;
+    run(&mut g, input(), 60);
+    assert_eq!(g.shift.state, frozen);
+    run(&mut g, InputState { start: true, ..input() }, 1);
+    run(&mut g, input(), 5);
+    assert_ne!(g.shift.state, frozen);
+}
+
+#[test]
+fn dying_mid_shift_respawns_cleanly_in_the_past() {
+    let mut g = playing(&["................", "..PR.....E......", "################"]);
+    let right = InputState { right: true, ..input() };
+    run_until(&mut g, right, 60, |g| g.shift.is_shifting()).unwrap();
+    // Walk into the enemy while the camera is still pivoting.
+    run_until(&mut g, right, 300, |g| g.phase == Phase::Dying).expect("hit by the enemy");
+    run_until(&mut g, input(), 200, |g| g.phase == Phase::Playing).unwrap();
+    assert_eq!(g.shift.state, ShiftState::Past);
+    assert!(g.rifts[0].active, "rift after the spawn point is back");
+}
+
+#[test]
+fn restart_after_visiting_the_future_is_back_in_the_past() {
+    let mut g =
+        playing(&["..........................", "..PR........G.............", "##########################"]);
+    run_until(&mut g, InputState { right: true, ..input() }, 600, |g| g.phase == Phase::Won).unwrap();
+    g.restart();
+    assert_eq!(g.shift.state, ShiftState::Past);
+    assert!(g.rifts.iter().all(|r| r.active));
+    assert_eq!(g.shift.params(false).crt, snes_wasm::world::shift::CRT_BASE);
 }

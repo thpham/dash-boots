@@ -1,6 +1,8 @@
 // WebAudio host: plays the cues emitted by the WASM core (see wasm/src/audio.rs).
 
 const MUSIC_PLAY_BASE = 64;
+const MUSIC_FUTURE_ON = 251;
+const MUSIC_FUTURE_OFF = 252;
 const MUSIC_PAUSE = 253;
 const MUSIC_RESUME = 254;
 const MUSIC_STOP = 255;
@@ -15,6 +17,21 @@ export type AudioHost = {
   /** Returns true when now muted. */
   toggleMute(): boolean;
 };
+
+/** Stereo exponentially decaying noise: a cheap, deterministic hall reverb. */
+function impulseResponse(ctx: AudioContext, seconds: number): AudioBuffer {
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  let seed = 1234567;
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      data[i] = ((seed / 0x7fffffff) * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+  }
+  return buf;
+}
 
 export function createAudio(baseUrl: string, sfxNames: string[], musicNames: string[]): AudioHost {
   const Ctx =
@@ -31,7 +48,29 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
   const sfxBus = ctx.createGain();
   musicBus.gain.value = MUSIC_VOLUME;
   sfxBus.gain.value = SFX_VOLUME;
-  musicBus.connect(master);
+  // Future: the same song "heard through the present" (low-pass + wide reverb).
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 20000;
+  const dry = ctx.createGain();
+  const wet = ctx.createGain();
+  wet.gain.value = 0;
+  const reverb = ctx.createConvolver();
+  reverb.buffer = impulseResponse(ctx, 2.5);
+  musicBus.connect(filter);
+  filter.connect(dry);
+  filter.connect(reverb);
+  reverb.connect(wet);
+  dry.connect(master);
+  wet.connect(master);
+
+  function setFuture(on: boolean) {
+    const t = ctx.currentTime;
+    const ramp = 0.4; // time constant: settles over ~1.2 s, like the camera
+    filter.frequency.setTargetAtTime(on ? 1200 : 20000, t, ramp);
+    wet.gain.setTargetAtTime(on ? 0.6 : 0, t, ramp);
+    dry.gain.setTargetAtTime(on ? 0.7 : 1, t, ramp);
+  }
   sfxBus.connect(master);
   master.connect(ctx.destination);
 
@@ -121,6 +160,8 @@ export function createAudio(baseUrl: string, sfxNames: string[], musicNames: str
         } else if (code === MUSIC_RESUME) {
           paused = false;
           startMusic();
+        } else if (code === MUSIC_FUTURE_ON || code === MUSIC_FUTURE_OFF) {
+          setFuture(code === MUSIC_FUTURE_ON);
         } else {
           wanted = code - MUSIC_PLAY_BASE;
           offset = 0;

@@ -1,6 +1,7 @@
 //! Static pickups and markers built from the level data.
 
 use crate::math::{Aabb, Vec2};
+use crate::world::shift::World;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Coin {
@@ -31,6 +32,8 @@ impl Pickup {
 pub struct Checkpoint {
     pub feet: Vec2,
     pub active: bool,
+    /// World the checkpoint was activated in.
+    pub world: World,
 }
 
 impl Checkpoint {
@@ -48,6 +51,19 @@ pub struct Goal {
 impl Goal {
     pub fn aabb(&self) -> Aabb {
         // Tall trigger so the goal can't be jumped over.
+        Aabb::new(self.feet.x - 6.0, self.feet.y - 160.0, 12.0, 160.0)
+    }
+}
+
+/// Past ↔ future trigger. Tall like checkpoints so it cannot be jumped over.
+#[derive(Clone, Copy, Debug)]
+pub struct Rift {
+    pub feet: Vec2,
+    pub active: bool,
+}
+
+impl Rift {
+    pub fn aabb(&self) -> Aabb {
         Aabb::new(self.feet.x - 6.0, self.feet.y - 160.0, 12.0, 160.0)
     }
 }

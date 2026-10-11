@@ -337,10 +337,42 @@ def sfx_pause():
     return notes([('E6', 0.06), ('B5', 0.06), ('E6', 0.12)], lambda p: pulse(p, 0.5), 0.3)
 
 
+def sfx_rift():
+    """Crystalline digital glitch: fast high arpeggio, rising sweep, noise burst."""
+    rnd = random.Random(5)
+    seq = [rnd.choice(['E6', 'B6', 'F#6', 'C#7', 'G#6', 'D#7']) for _ in range(10)]
+    out = notes([(n, 0.03) for n in seq], lambda p: pulse(p, 0.125), 0.28)
+    out = mix_into(out, sweep(0.5, 400, 2400, triangle, 0.3, decay=3))
+    nz = Noise(11)
+    burst = [nz.sample(18000) * 0.25 * math.exp(-i / SR * 18) for i in range(int(0.25 * SR))]
+    return mix_into(out, burst)
+
+
+def sfx_return():
+    """Warm, slightly detuned D major chord with a slow tape wow."""
+    n = int(1.6 * SR)
+    freqs = [note_freq(x) for x in ['D4', 'F#4', 'A4', 'D5']]
+    phases = [0.0] * (len(freqs) * 2)
+    out = []
+    for i in range(n):
+        t = i / SR
+        wow = 1.0 + 0.004 * math.sin(2 * math.pi * 0.8 * t)
+        env = min(1.0, t / 0.08) * math.exp(-t * 1.6)
+        s = 0.0
+        for k, f in enumerate(freqs):
+            for j, det in enumerate((0.997, 1.003)):
+                idx = k * 2 + j
+                phases[idx] += f * det * wow / SR
+                s += triangle(phases[idx])
+        out.append(s / len(phases) * 0.8 * env)
+    return out
+
+
 SFX = {
     'jump': sfx_jump, 'dash': sfx_dash, 'coin': sfx_coin, 'stomp': sfx_stomp,
     'hurt': sfx_hurt, 'death': sfx_death, 'powerup': sfx_powerup,
     'checkpoint': sfx_checkpoint, 'clear': sfx_clear, 'bump': sfx_bump, 'pause': sfx_pause,
+    'rift': sfx_rift, 'return': sfx_return,
 }
 
 

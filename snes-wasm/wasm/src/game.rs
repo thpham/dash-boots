@@ -5,10 +5,11 @@ use crate::sim::fixed_timestep::FixedTimestep;
 use crate::tuning::{DT, TUNING as T};
 use crate::world::camera::Camera;
 use crate::world::enemy::{Enemy, EnemyState};
-use crate::world::entities::{Checkpoint, Coin, Goal, Pickup};
+use crate::world::entities::{Checkpoint, Coin, Goal, Pickup, Rift};
 use crate::world::level::{Level, LevelData, SpawnPoint};
 use crate::world::particles::{Particle, ParticleKind, Particles};
 use crate::world::player::Player;
+use crate::world::shift::{Shift, World};
 
 /// Music track ids (index into `audio::MUSIC_NAMES`).
 pub const MUSIC_LEVEL1: u8 = 0;
@@ -37,14 +38,17 @@ pub struct Game {
     pub coins: Vec<Coin>,
     pub pickups: Vec<Pickup>,
     pub checkpoints: Vec<Checkpoint>,
+    pub rifts: Vec<Rift>,
     pub goal: Goal,
     pub particles: Particles,
     pub camera: Camera,
     pub phase: Phase,
+    pub shift: Shift,
     /// Seconds spent in the current phase.
     pub phase_time: f32,
     pub paused: bool,
     pub respawn: Vec2,
+    pub respawn_world: World,
     pub coins_collected: u32,
     pub coins_total: u32,
     /// Play time in seconds (stops on clear).
@@ -83,8 +87,11 @@ impl Game {
                 .spawns
                 .checkpoints
                 .iter()
-                .map(|c| Checkpoint { feet: feet(*c), active: false })
+                .map(|c| Checkpoint { feet: feet(*c), active: false, world: World::Past })
                 .collect(),
+            rifts: data.spawns.rifts.iter().map(|r| Rift { feet: feet(*r), active: true }).collect(),
+            respawn_world: World::Past,
+            shift: Shift::new(World::Past),
             goal: Goal { feet: feet(data.spawns.goal) },
             particles: Particles::default(),
             camera: Camera::new(view_w, view_h),
@@ -142,6 +149,14 @@ impl Game {
         self.player = Player::spawn_at(self.respawn);
         self.particles.clear();
         self.camera.snap_to(self.player.feet(), self.level.width_px(), self.level.height_px());
+        // Respawn settled in the checkpoint's world; rifts ahead are usable again.
+        self.shift = Shift::new(self.respawn_world);
+        let rx = self.respawn.x;
+        for r in &mut self.rifts {
+            if r.feet.x > rx {
+                r.active = true;
+            }
+        }
     }
 
     fn set_phase(&mut self, phase: Phase) {
@@ -183,6 +198,9 @@ impl Game {
             return;
         }
         self.phase_time += DT;
+        if self.phase != Phase::Title {
+            self.shift.step();
+        }
 
         match self.phase {
             Phase::Title => {
@@ -209,6 +227,7 @@ impl Game {
                     self.reset_actors();
                     self.set_phase(Phase::Playing);
                     self.audio.push(AudioEvent::PlayMusic(MUSIC_LEVEL1));
+                    self.audio.push(AudioEvent::MusicFuture(self.shift.world() == World::Future));
                 }
             }
             Phase::Won => {
@@ -350,9 +369,20 @@ impl Game {
             if !self.checkpoints[i].active && pa.overlaps(&self.checkpoints[i].aabb()) {
                 self.checkpoints[i].active = true;
                 self.respawn = self.checkpoints[i].feet;
+                self.checkpoints[i].world = self.shift.world();
+                self.respawn_world = self.checkpoints[i].world;
                 self.sfx(Sfx::Checkpoint);
                 let c = self.checkpoints[i].feet - Vec2::new(-4.0, 26.0);
                 self.particles.burst(ParticleKind::Sparkle, c, 8, 50.0, 0.4);
+            }
+        }
+        for i in 0..self.rifts.len() {
+            if self.rifts[i].active && !self.shift.is_shifting() && pa.overlaps(&self.rifts[i].aabb()) {
+                self.rifts[i].active = false;
+                self.shift.trigger();
+                let future = self.shift.world() == World::Future;
+                self.sfx(if future { Sfx::Rift } else { Sfx::Return });
+                self.audio.push(AudioEvent::MusicFuture(future));
             }
         }
         if pa.overlaps(&self.goal.aabb()) {
