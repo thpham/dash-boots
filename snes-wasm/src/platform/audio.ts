@@ -240,7 +240,8 @@ export function createAudio(render: AudioRenderer): AudioHost {
   }
 
   // SFX: rendered once at boot (short, synchronous, deterministic).
-  for (let id = 0; id < 13; id++) {
+  // The alpine stems (bell / wheel rattle / crust / moo) ride along.
+  for (let id = 0; id < 17; id++) {
     try {
       sfx.set(id, toBuffer(ctx, render.sfx(id)));
     } catch (err) {

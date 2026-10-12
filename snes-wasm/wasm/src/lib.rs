@@ -58,6 +58,8 @@ pub mod sim {
 pub mod world {
     pub mod bumps;
     pub mod camera;
+    pub mod cheese;
+    pub mod cow;
     pub mod enemy;
     pub mod entities;
     pub mod level;

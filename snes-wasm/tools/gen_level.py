@@ -16,6 +16,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEVELS_DIR = os.path.join(ROOT, 'public', 'levels')
 
+
+def levels_dir(argv):
+    """Output directory; `--out <dir>` redirects the run (tests use it so a
+    regeneration never overwrites the shipped maps)."""
+    return argv[argv.index('--out') + 1] if '--out' in argv else LEVELS_DIR
+
 W, H = 220, 15
 TS = 16
 BASE = 12  # default ground top row
@@ -142,6 +148,7 @@ def build_meadow():
     L.ground(54, 80)
     L.decorate(SIGN, 56)
     L.on_surface('dash_boots', 59)
+    L.on_surface('cow', 55)  # decor herd on the midland flats
     L.decorate(FLOWER, 61)
     # Brick block with a crawl space under it (slide for coins, or jump over).
     L.block(BRICKK, 64, 9, 68, 10)
@@ -177,6 +184,8 @@ def build_meadow():
     L.block(STONEK, 129, 12, 130, 14)           # stepping pillar
     L.coin_arc(126, 133, 6, height=2)
     L.ground(134, 166)
+    L.on_surface('cow', 139)
+    L.on_surface('cow', 144)
     L.on_surface('enemy_spawn', 141)
     L.on_surface('enemy_spawn', 145)
     L.on_surface('enemy_spawn', 148)
@@ -197,10 +206,17 @@ def build_meadow():
     L.ground(177, 186, top=9)                  # high plateau
     L.on_surface('checkpoint', 178)            # remembers the future
     L.on_surface('enemy_spawn', 182)
+    # Swiss coin hideout: two pillar columns frame an alcove; hop in, grab it.
+    L.block(GROUND, 183, 6, 183, 8)
+    L.block(GROUND, 186, 6, 186, 8)
+    L.coin_row(184, 185, 6)
+    L.coin_row(184, 185, 7)
+    L.coin_row(184, 185, 8)
     L.decorate(FENCE, 180)
     L.decorate(FENCE, 181)
     L.ground(187, 219)
     L.on_surface('rift', 188)                  # back to the past for the last stretch
+    L.on_surface('cow', 195)
     L.coin_arc(189, 193, 7, height=1)
     L.pit(197, 199)
     L.coin_row(197, 199, 9)
@@ -240,7 +256,9 @@ def build_sunset():
     L.ground(40, 60, top=9)                     # upper terrace (reachable +3)
     L.plank(33, 36, 9)
     L.coin_row(33, 36, 7)
+    L.on_surface('enemy_spawn', 34)             # patrols under the bridge planks
     L.on_surface('enemy_spawn', 45)
+    L.on_surface('goat_spawn', 57)             # the plateau goat, wheel at the ready
     L.on_surface('enemy_spawn', 52)
     L.decorate(BUSH_L, 47)
     L.decorate(BUSH_R, 48)
@@ -248,6 +266,7 @@ def build_sunset():
     L.pit(62, 63)                               # small post-plateau gap
     L.on_surface('dash_boots', 65)              # on the lower ground, terrace exit
     L.decorate(FLOWER, 68)
+    L.on_surface('cow', 70)
     L.decorate(ROCK, 71)
 
     # C: stone stairs up, two-wide pit, stairs down -------------------------
@@ -272,6 +291,9 @@ def build_sunset():
     L.block(STONEK, 125, 12, 126, 14)
     L.coin_arc(119, 128, 7, height=2)
     L.ground(129, 160)
+    L.on_surface('cow', 131)
+    # Marmot corridor under a coin shower: the thrown wheel clears the way.
+    L.coin_row(130, 145, 10)
     L.on_surface('enemy_spawn', 136)
     L.on_surface('enemy_spawn', 140)
     L.decorate(SIGN, 144)                       # "slide!"
@@ -280,6 +302,7 @@ def build_sunset():
         L.deco[(x, 11)] = CAVE
     L.coin_row(147, 151, 11)
     L.decorate(TUFT, 154)
+    L.on_surface('enemy_spawn', 150)            # the sentinel pacing the crawl roof
 
     # E: ridge climb and finale --------------------------------------------
     L.pit(161, 168)                             # 8 wide: plank hops
@@ -319,16 +342,21 @@ def build_cave():
     L.decorate(CAVE, 2, 5)
     L.on_surface('player_spawn', 3)
     L.decorate(SIGN, 6)
+    # Cows only ever graze the entry corridor, never the fromagerie gallery.
+    L.on_surface('cow', 8)
     L.decorate(ROCK, 9)
     L.coin_row(10, 13, 9)
     L.on_surface('enemy_spawn', 17)
+    L.on_surface('cow', 21)
     L.block(STONEK, 24, 10, 26, 11)             # low stone wall, coins above
     L.coin_arc(24, 26, 8)
     L.pit(28, 30)                               # flooded stretch (3 wide)
     L.coin_arc(28, 30, 9)
     L.decorate(CAVE, 34, 5)
     L.decorate(ROCK, 38)
+    L.on_surface('cow', 36)
     L.on_surface('enemy_spawn', 42)
+    L.on_surface('enemy_spawn', 34)             # between the flooded stretches
 
     # B: gem terraces --------------------------------------------------------
     L.pit(50, 53)                               # 4 wide, jump or plank hop
@@ -346,6 +374,7 @@ def build_cave():
     L.ground(83, 117)
     L.on_surface('dash_boots', 86)
     L.decorate(ROCK, 89)
+    L.on_surface('enemy_spawn', 93)             # lone sentry on the long corridor
 
     # C: crawl tunnel, gem shelf with an enemy on it --------------------------
     L.block(BRICKK, 97, 0, 103, 10)             # wall to the roof, crawl under
@@ -367,10 +396,17 @@ def build_cave():
     L.ground(130, 168)
     L.on_surface('checkpoint', 133)
     L.on_surface('rift', 136)                   # excursion: the future underfoot
+    L.on_surface('enemy_spawn', 130)            # floodwall sentry
+    L.on_surface('goat_spawn', 149)             # the pen
     L.on_surface('enemy_spawn', 146)
     L.on_surface('enemy_spawn', 152)
+    L.on_surface('goat_spawn', 155)             # ... and its second goat
     L.block(BRICKK, 144, 10, 147, 11)           # little hop-wall with coins
     L.coin_arc(144, 147, 8)
+    L.on_surface('enemy_spawn', 143)
+    # Stash behind the hop-wall: the upper route hops it, marmots guard below.
+    L.coin_row(148, 149, 8)
+    L.coin_row(148, 149, 9)
     L.decorate(CAVE, 149, 5)
     L.stairs(156, 3, up=True)
     L.pit(160, 162)
@@ -412,11 +448,11 @@ def build_night():
     L.block(BRICKK, 18, 10, 21, 11)
     L.coin_arc(18, 21, 8)
     L.on_surface('enemy_spawn', 24)
-    L.pit(30, 34)                               # 5 wide: clears with a running jump
+    L.pit(30, 32)                               # 3 wide: the v0.3.1 landing fix
     L.coin_arc(30, 34, 9)
 
     # B: terrace over a wide valley ------------------------------------------
-    L.ground(35, 80)
+    L.ground(33, 80)
     L.pit(36, 37)                               # notch in the terrace
     L.pit(40, 41)
     L.plank(40, 41, 10)
@@ -429,6 +465,8 @@ def build_night():
     L.decorate(FENCE, 64)
     L.decorate(FENCE, 65)
     L.decorate(BUSH_R, 70)
+    L.on_surface('goat_spawn', 71)              # guards the crawl entrance
+    L.on_surface('cow', 56)                     # terrace steer
 
     # C: double crawl ---------------------------------------------------------
     L.block(BRICKK, 74, 0, 80, 10)              # first wall-to-sky
@@ -436,6 +474,7 @@ def build_night():
         L.deco[(x, 11)] = CAVE
     L.coin_row(75, 79, 11)
     L.ground(81, 128)
+    L.on_surface('goat_spawn', 82)              # ... and its 3-wide slot between the walls
     L.block(BRICKK, 84, 0, 90, 10)              # second wall-to-sky, coins in both
     for x in range(84, 91):
         L.deco[(x, 11)] = CAVE
@@ -459,14 +498,15 @@ def build_night():
     L.block(STONEK, 137, 11, 138, 14)
     L.plank(140, 141, 10)
     L.coin_arc(131, 141, 6, height=2)
-    L.on_surface('enemy_spawn', 147)
+    L.on_surface('cow', 144)                    # the marsh-edge herd
+    L.on_surface('cow', 151)
+    L.on_surface('cow', 155)
+    L.on_surface('cow', 166)
     L.decorate(TUFT, 150)
-    L.on_surface('enemy_spawn', 154)
     L.block(BRICKK, 158, 0, 164, 10)            # last crawl, guarded by an enemy
     for x in range(158, 165):
         L.deco[(x, 11)] = CAVE
     L.coin_row(159, 163, 11)
-    L.on_surface('enemy_spawn', 167)
 
     # E: long ridge, finale ----------------------------------------------------
     L.pit(169, 177)                             # 9 wide: plank, pillar, plank
@@ -576,8 +616,9 @@ def write_compact_json(path, m):
 
 
 def print_map(L):
-    marks = {o['kind']: c for c, o in zip('PEGCBR', [{'kind': k} for k in
-             ['player_spawn', 'enemy_spawn', 'goal', 'checkpoint', 'dash_boots', 'rift']])}
+    marks = {o['kind']: c for c, o in zip('PEGCBRnw', [{'kind': k} for k in
+             ['player_spawn', 'enemy_spawn', 'goal', 'checkpoint', 'dash_boots', 'rift',
+              'goat_spawn', 'cow']])}
     objs = {}
     for o in L.objects:
         cx = int((o['x'] + o['w'] / 2) // TS)
@@ -615,16 +656,16 @@ def main():
         ('level3', build_cave, '#101433'),
         ('level4', build_night, '#0a1030'),
     ]
-    os.makedirs(LEVELS_DIR, exist_ok=True)
+    os.makedirs(levels_dir(sys.argv), exist_ok=True)
     for name, build, bg in shipped:
-        path = os.path.join(LEVELS_DIR, f'{name}.json')
+        path = os.path.join(levels_dir(sys.argv), f'{name}.json')
         L = build()
         write_compact_json(path, to_tiled(L, bg))
         print(f'wrote {path}: {L.w}x{H}, {len(L.coins)} coins, {len(L.objects)} objects')
         if '--print' in sys.argv:
             print_map(L)
             print()
-    test_out = os.path.join(LEVELS_DIR, 'test_rift.json')
+    test_out = os.path.join(levels_dir(sys.argv), 'test_rift.json')
     with open(test_out, 'w') as f:
         json.dump(build_test_rift(), f)
     print(f'wrote {test_out}')

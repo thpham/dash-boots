@@ -35,6 +35,13 @@ pub struct Spawns {
     pub player: SpawnPoint,
     #[serde(default)]
     pub enemies: Vec<SpawnPoint>,
+    /// Goat enemies (the cheese-wheel droppers); a campaign-convention object
+    /// kind, so optional like the walkers.
+    #[serde(default)]
+    pub goats: Vec<SpawnPoint>,
+    /// Decor cows — non-interactive livestock, never dangerous.
+    #[serde(default)]
+    pub cows: Vec<SpawnPoint>,
     pub goal: SpawnPoint,
     #[serde(default)]
     pub checkpoints: Vec<SpawnPoint>,

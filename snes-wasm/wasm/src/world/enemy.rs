@@ -6,6 +6,9 @@ use crate::world::physics::{move_and_collide, on_ground};
 pub const SIZE: Vec2 = Vec2::new(14.0, 14.0);
 pub const SPEED: f32 = 32.0;
 const SQUASH_TIME: f32 = 0.5;
+/// Goats trot for this long, then browse for the rest of their cycle.
+const GOAT_TROT: f32 = 2.0;
+const GOAT_CYCLE: f32 = 3.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EnemyState {
@@ -22,6 +25,14 @@ pub enum EnemyState {
     Dead,
 }
 
+/// Alpine folk: every spawn is a marmot; goat spawns (Tiled `goat_spawn`)
+/// carry the cheese wheel.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kind {
+    Marmot,
+    Goat,
+}
+
 /// "Grumble": walks, falls with gravity, turns around at walls and ledges.
 #[derive(Clone, Copy, Debug)]
 pub struct Enemy {
@@ -29,19 +40,24 @@ pub struct Enemy {
     pub vel: Vec2,
     pub dir: f32,
     pub state: EnemyState,
+    pub kind: Kind,
     pub on_ground: bool,
     pub anim: f32,
+    /// Seconds since the goat woke, drives its trot/browse cycle.
+    pub cycle: f32,
 }
 
 impl Enemy {
-    pub fn spawn_at(feet: Vec2) -> Self {
+    pub fn spawn_at(feet: Vec2, kind: Kind) -> Self {
         Self {
             pos: Vec2::new(feet.x - SIZE.x * 0.5, feet.y - SIZE.y),
             vel: Vec2::default(),
             dir: -1.0,
             state: EnemyState::Dormant,
+            kind,
             on_ground: false,
             anim: 0.0,
+            cycle: 0.0,
         }
     }
 
@@ -78,6 +94,11 @@ impl Enemy {
             }
             EnemyState::Walking => {
                 self.anim += dt;
+                // Goats trot, then stop to browse at the bottom of the cycle.
+                if self.kind == Kind::Goat {
+                    self.cycle = (self.cycle + dt) % GOAT_CYCLE;
+                }
+                let browsing = self.kind == Kind::Goat && self.cycle > GOAT_TROT;
                 // Turn around at ledges (only when grounded, so they still fall
                 // if spawned mid-air).
                 if self.on_ground {
@@ -86,7 +107,7 @@ impl Enemy {
                         self.dir = -self.dir;
                     }
                 }
-                self.vel.x = self.dir * SPEED;
+                self.vel.x = if browsing { 0.0 } else { self.dir * SPEED };
                 self.vel.y = (self.vel.y + T.gravity_fall * dt).min(T.max_fall);
                 let hits = move_and_collide(level, &mut self.pos, SIZE, self.vel * dt);
                 if hits.left || hits.right {

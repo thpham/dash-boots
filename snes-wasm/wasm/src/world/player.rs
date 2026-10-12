@@ -19,6 +19,8 @@ pub struct Player {
     pub crouching: bool,
     pub sliding: bool,
     pub dash_boots: bool,
+    /// Carrying a cheese wheel: the dash button throws it instead of dashing.
+    pub cheese: bool,
     pub dash_timer: f32,
     pub dash_cooldown: f32,
     pub coyote: f32,
@@ -36,6 +38,7 @@ pub struct PlayerEvents {
     pub landed: bool,
     pub dashed: bool,
     pub bumped: bool,
+    pub threw: bool,
     pub slide_started: bool,
 }
 
@@ -50,6 +53,7 @@ impl Player {
             crouching: false,
             sliding: false,
             dash_boots: false,
+            cheese: false,
             dash_timer: 0.0,
             dash_cooldown: 0.0,
             coyote: 0.0,
@@ -165,8 +169,13 @@ impl Player {
             self.sliding = false;
         }
 
+        // Carrying a cheese wheel: the dash button throws it instead.
+        if self.cheese && b.dash_pressed {
+            ev.threw = true;
+        }
+
         // Dash burst (boots only; the same button runs when held).
-        if self.dash_boots && b.dash_pressed && self.dash_cooldown <= 0.0 && !self.crouching {
+        if self.dash_boots && b.dash_pressed && self.dash_cooldown <= 0.0 && !self.crouching && !self.cheese {
             let d = if dir != 0.0 { dir } else { self.facing };
             self.facing = d;
             self.dash_timer = T.dash_time;

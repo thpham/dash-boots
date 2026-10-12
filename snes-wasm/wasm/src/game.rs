@@ -5,11 +5,14 @@ use crate::sim::fixed_timestep::FixedTimestep;
 use crate::tuning::{DT, TUNING as T};
 use crate::world::bumps::Bump;
 use crate::world::camera::Camera;
-use crate::world::enemy::{Enemy, EnemyState};
+use crate::world::cheese::{CheeseWheel, WheelState, MAX_WHEELS, WHEEL_SIZE};
+use crate::world::cow::Cow;
+use crate::world::enemy::{self, Enemy, EnemyState, Kind};
 use crate::world::entities::{Checkpoint, Coin, Goal, Pickup, Rift};
 use crate::world::level::{Level, LevelData, SpawnPoint};
 use crate::world::particles::{Particle, ParticleKind, Particles};
-use crate::world::player::Player;
+use crate::world::physics::overlaps_solid;
+use crate::world::player::{self, Player};
 use crate::world::shift::{Shift, World};
 
 /// Music track ids (index into `audio::MUSIC_NAMES`).
@@ -42,6 +45,10 @@ pub struct Game {
     pub rifts: Vec<Rift>,
     /// Boxes currently bouncing from a head bump (Mario Bros).
     pub bumps: Vec<Bump>,
+    /// Cheese wheels in play: floor pickups and sliding projectiles.
+    pub wheels: Vec<CheeseWheel>,
+    /// Decor: alpine livestock, never interactive.
+    pub cows: Vec<Cow>,
     pub goal: Goal,
     pub particles: Particles,
     pub camera: Camera,
@@ -101,6 +108,8 @@ impl Game {
                 .collect(),
             rifts: data.spawns.rifts.iter().map(|r| Rift { feet: feet(*r), active: true }).collect(),
             bumps: Vec::new(),
+            wheels: Vec::new(),
+            cows: Vec::new(),
             respawn_world: World::Past,
             shift: Shift::new(World::Past),
             goal: Goal { feet: feet(data.spawns.goal) },
@@ -170,7 +179,16 @@ impl Game {
     /// Enemies, power-ups and the player back to their spawn state (used on
     /// boot and after each death). Coins and checkpoints persist.
     fn reset_actors(&mut self) {
-        self.enemies = self.data.spawns.enemies.iter().map(|e| Enemy::spawn_at(feet(*e))).collect();
+        self.wheels.clear();
+        self.cows = self.data.spawns.cows.iter().map(|c| Cow::spawn_at(feet(*c))).collect();
+        self.enemies = self
+            .data
+            .spawns
+            .enemies
+            .iter()
+            .map(|e| Enemy::spawn_at(feet(*e), Kind::Marmot))
+            .chain(self.data.spawns.goats.iter().map(|e| Enemy::spawn_at(feet(*e), Kind::Goat)))
+            .collect();
         // Dying always costs the boots, so the pickups come back too.
         self.pickups =
             self.data.spawns.dash_boots.iter().map(|b| Pickup { feet: feet(*b), taken: false }).collect();
@@ -345,12 +363,151 @@ impl Game {
         }
         self.update_bumps();
 
+        // Decor cows amble through; a passing player earns a single moo.
+        let mut mooed = false;
+        for c in &mut self.cows {
+            mooed |= c.step(&self.level, self.player.feet(), DT);
+        }
+        if mooed {
+            self.sfx(Sfx::Moo);
+        }
+
+        if ev.threw {
+            self.player.cheese = false;
+            self.wheel_launch(self.player.facing);
+        }
+
+        self.update_wheels();
+        self.wheel_vs_enemies();
+
         self.player_vs_enemies(b, prev_bottom);
         if self.phase != Phase::Playing {
             return;
         }
         self.collect_items();
+        self.wheel_vs_player();
         self.particles.update(DT);
+    }
+
+    /// Throw a sliding wheel from just in front of the player: the spawn sits
+    /// one pixel clear of the player's AABB, so a throw is never disarmed by
+    /// its own wheel. Pressed flush against a wall, that spot is inside the
+    /// solid — there the spawn pulls back, under the player's own tile if it
+    /// must (a standing player's tile band is never solid), so the slide's
+    /// first contact is the wall face and the wheel ricochets instead of
+    /// riding `move_and_collide`'s embedded no-collision branch through it.
+    fn wheel_launch(&mut self, dir: f32) {
+        let feet = self.player.feet();
+        let reach = player::WIDTH * 0.5 + WHEEL_SIZE.x * 0.5 + 1.0;
+        let deepest = player::WIDTH * 0.5;
+        let embeds = |offset: f32| {
+            overlaps_solid(
+                &self.level,
+                feet.x + dir * offset - WHEEL_SIZE.x * 0.5,
+                feet.y - WHEEL_SIZE.y,
+                WHEEL_SIZE.x,
+                WHEEL_SIZE.y,
+            )
+        };
+        let mut offset = reach;
+        while offset > -deepest && embeds(offset) {
+            offset -= 1.0;
+        }
+        let mut wheel = CheeseWheel::sliding_from(feet + Vec2::new(dir * offset, 0.0), dir);
+        if embeds(offset) {
+            // Deeper than the player's own tile would still be solid — only
+            // possible if the player itself is buried. Settle for a drop.
+            wheel = CheeseWheel::dropped_at(feet);
+        }
+        self.wheels.push(wheel);
+    }
+
+    /// Cheese wheels: slide physics, settle bursts and pit removal. The rattle
+    /// re-fires on every wall bounce; the crust rings once per settle.
+    fn update_wheels(&mut self) {
+        let mut bursts = Vec::new();
+        let mut bounced = false;
+        let mut settled = false;
+        for w in &mut self.wheels {
+            let dir = if let WheelState::Slide { dir } = w.state { dir } else { continue };
+            if w.step(&self.level, DT) {
+                settled = true;
+                bursts.push(Vec2::new(w.pos.x + WHEEL_SIZE.x * 0.5, w.pos.y + WHEEL_SIZE.y * 0.5));
+            } else if let WheelState::Slide { dir: after } = w.state {
+                bounced |= after != dir;
+            }
+        }
+        self.wheels.retain(|w| !w.fallen_off(self.level.height_px()));
+        for at in bursts {
+            self.particles.burst(ParticleKind::Dust, at, 8, 45.0, 0.4);
+        }
+        if bounced {
+            self.sfx(Sfx::WheelSlide);
+        }
+        if settled {
+            self.sfx(Sfx::Crust);
+        }
+    }
+
+    /// A sliding wheel that catches the player knocks them back — it never
+    /// kills. A carrying player is disarmed: the carried wheel goes rolling
+    /// away, and the wheel that hit is the throw-away (net one wheel leaves).
+    fn wheel_vs_player(&mut self) {
+        for i in 0..self.wheels.len() {
+            if !matches!(self.wheels[i].state, WheelState::Slide { .. }) || self.player.invuln > 0.0 {
+                continue;
+            }
+            if !self.player.aabb().overlaps(&self.wheels[i].aabb()) {
+                continue;
+            }
+            let away = (self.player.aabb().center_x() - self.wheels[i].aabb().center_x()).signum();
+            self.player.vel = Vec2::new(away * 120.0, -220.0);
+            self.player.jumping = false;
+            self.player.invuln = T.invuln_time;
+            self.sfx(Sfx::Hurt);
+            if self.player.cheese {
+                self.player.cheese = false;
+                self.wheel_launch(-away);
+                self.wheels.remove(i);
+            }
+        }
+    }
+
+    /// Flatten an enemy; a crushed goat drops its wheel on the spot (capped —
+    /// the alpine floor never holds more than `MAX_WHEELS` wheels at once).
+    fn squash_enemy(&mut self, i: usize) {
+        let goat = self.enemies[i].kind == Kind::Goat;
+        self.enemies[i].squash();
+        if !goat {
+            return;
+        }
+        // The goat's baa is a stylized chime, whatever flattened it.
+        self.sfx(Sfx::Bell);
+        if self.wheels.len() >= MAX_WHEELS {
+            return;
+        }
+        let e = &self.enemies[i];
+        let at = Vec2::new(e.pos.x + enemy::SIZE.x * 0.5, e.pos.y + enemy::SIZE.y);
+        self.wheels.push(CheeseWheel::dropped_at(at));
+    }
+
+    /// Sliding wheels crush dangerous enemies, exactly like the player's stomp.
+    fn wheel_vs_enemies(&mut self) {
+        for i in 0..self.wheels.len() {
+            if !matches!(self.wheels[i].state, WheelState::Slide { .. }) {
+                continue;
+            }
+            let wa = self.wheels[i].aabb();
+            for j in 0..self.enemies.len() {
+                if !self.enemies[j].is_dangerous() || !wa.overlaps(&self.enemies[j].aabb()) {
+                    continue;
+                }
+                let center = Vec2::new(self.enemies[j].aabb().center_x(), self.enemies[j].pos.y + 7.0);
+                self.squash_enemy(j);
+                self.sfx(Sfx::Stomp);
+                self.particles.burst(ParticleKind::Star, center, 4, 60.0, 0.3);
+            }
+        }
     }
 
     /// Mario Bros: enemies standing on the box the player just bumped from
@@ -420,7 +577,7 @@ impl Game {
                 self.sfx(Sfx::Stomp);
                 self.particles.burst(ParticleKind::Star, center, 4, 60.0, 0.3);
             } else if p.vel.y > 0.0 && prev_bottom <= e.aabb().top() + 6.0 {
-                self.enemies[i].squash();
+                self.squash_enemy(i);
                 stomped = true;
                 self.sfx(Sfx::Stomp);
                 self.particles.burst(ParticleKind::Star, center, 4, 60.0, 0.3);
@@ -441,6 +598,16 @@ impl Game {
 
     fn collect_items(&mut self) {
         let pa = self.player.aabb();
+        // Floor wheels: walking over one picks it up (the second overlapping
+        // wheel waits for the next pass — it never blocks).
+        if !self.player.cheese {
+            if let Some(ix) =
+                self.wheels.iter().position(|w| w.state == WheelState::Floor && pa.overlaps(&w.aabb()))
+            {
+                self.wheels.remove(ix);
+                self.player.cheese = true;
+            }
+        }
         for i in 0..self.coins.len() {
             if !self.coins[i].collected && pa.overlaps(&self.coins[i].aabb()) {
                 self.coins[i].collected = true;
@@ -489,7 +656,12 @@ impl Game {
     }
 
     /// Enemy contact: the dash boots absorb one hit, otherwise the player dies.
+    /// A carrying player always drops the wheel — it slides away from them.
     fn hurt_player(&mut self) {
+        if self.player.cheese {
+            self.player.cheese = false;
+            self.wheel_launch(-self.player.facing);
+        }
         if self.player.dash_boots {
             self.player.dash_boots = false;
             self.player.invuln = T.invuln_time;

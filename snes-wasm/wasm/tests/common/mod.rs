@@ -18,6 +18,8 @@ pub fn level(rows: &[&str]) -> LevelData {
     let mut player = None;
     let mut goal = None;
     let mut enemies = vec![];
+    let mut goats = vec![];
+    let mut cows = vec![];
     let mut checkpoints = vec![];
     let mut dash_boots = vec![];
     let mut rifts = vec![];
@@ -31,6 +33,8 @@ pub fn level(rows: &[&str]) -> LevelData {
                 'o' => coins[i] = 1,
                 'P' => player = Some(feet),
                 'E' => enemies.push(feet),
+                'g' => goats.push(feet),
+                'w' => cows.push(feet),
                 'G' => goal = Some(feet),
                 'C' => checkpoints.push(feet),
                 'B' => dash_boots.push(feet),
@@ -51,6 +55,8 @@ pub fn level(rows: &[&str]) -> LevelData {
             player: player.expect("level needs a P"),
             goal: goal.unwrap_or(SpawnPoint { x: w as f32 * TS - 8.0, y: h as f32 * TS + 1000.0 }),
             enemies,
+            goats,
+            cows,
             checkpoints,
             dash_boots,
             rifts,

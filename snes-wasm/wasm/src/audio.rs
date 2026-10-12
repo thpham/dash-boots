@@ -26,10 +26,18 @@ pub enum Sfx {
     Pause,
     Rift,
     Return,
+    /// The goat's squash chime: a stylized dinging bell for the drop.
+    Bell,
+    /// Rattle while a cheese wheel slides; the caller re-fires it per bounce.
+    WheelSlide,
+    /// One-shot when a wheel settles back into a floor pickup.
+    Crust,
+    /// The cows' one greeting: a moo for a player who has just come close.
+    Moo,
 }
 
 /// SFX stem names, indexed by `Sfx as usize` (synthesized, not fetched).
-pub const SFX_NAMES: [&str; 13] = [
+pub const SFX_NAMES: [&str; 17] = [
     "jump",
     "dash",
     "coin",
@@ -43,6 +51,10 @@ pub const SFX_NAMES: [&str; 13] = [
     "pause",
     "rift",
     "return",
+    "bell",
+    "wheel",
+    "crust",
+    "moo",
 ];
 
 /// Music track display names, indexed by music id (rendered in-wasm).

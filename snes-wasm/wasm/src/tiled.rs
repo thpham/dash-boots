@@ -146,6 +146,8 @@ pub fn parse_tiled_json(text: &str) -> Result<LevelData, String> {
             player: one("player_spawn")?,
             goal: one("goal")?,
             enemies: of_kind("enemy_spawn"),
+            goats: of_kind("goat_spawn"),
+            cows: of_kind("cow"),
             checkpoints: of_kind("checkpoint"),
             dash_boots: of_kind("dash_boots"),
             rifts: of_kind("rift"),

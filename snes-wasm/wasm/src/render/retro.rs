@@ -2,7 +2,8 @@ use super::{RenderList, TEX_BG_FAR, TEX_BG_NEAR, TEX_SPRITES, TEX_TILES, WHITE};
 use crate::game::{Game, Phase};
 use crate::math::Vec2;
 use crate::sprites::{self, Frame, PlayerFrame};
-use crate::world::enemy::EnemyState;
+use crate::world::cheese::WheelState;
+use crate::world::enemy::{EnemyState, Kind};
 use crate::world::particles::ParticleKind;
 use crate::world::player;
 
@@ -84,23 +85,69 @@ pub fn world_sprites(g: &Game) -> Vec<WorldSprite> {
     }
     for e in &g.enemies {
         let (x, y) = (e.pos.x - 1.0, e.pos.y - 2.0);
+        // Goats sit dazed instead of flipping over (their wheel drops); marmots
+        // keep the shell-style flip.
+        let (walk, dazed) = if e.kind == Kind::Goat {
+            (sprites::GOAT_WALK, sprites::GOAT_DAZED)
+        } else {
+            (sprites::ENEMY_WALK, sprites::ENEMY_SQUASH)
+        };
         match e.state {
             EnemyState::Dormant | EnemyState::Walking => {
-                let f = sprites::ENEMY_WALK[((e.anim * 6.0) as usize) % 2];
+                let f = walk[((e.anim * 6.0) as usize) % 2];
                 push(f, x, y, e.dir > 0.0, false, SpriteKind::Entity);
             }
-            EnemyState::Squashed(_) => push(sprites::ENEMY_SQUASH, x, y, false, false, SpriteKind::Entity),
+            EnemyState::Squashed(_) => push(dazed, x, y, false, false, SpriteKind::Entity),
+            EnemyState::Flipped(_) if e.kind == Kind::Goat => {
+                push(dazed, x, y, false, false, SpriteKind::Entity)
+            }
             EnemyState::Flipped(_) => {
                 // On its back: upside-down, wiggling legs.
                 let f = sprites::ENEMY_WALK[((e.anim * 12.0) as usize) % 2];
                 push(f, x, y, false, true, SpriteKind::Entity);
             }
-            EnemyState::Knocked => push(sprites::ENEMY_WALK[0], x, y, false, true, SpriteKind::Entity),
+            EnemyState::Knocked => push(walk[0], x, y, false, true, SpriteKind::Entity),
             EnemyState::Dead => {}
         }
     }
+    for w in &g.wheels {
+        let f = match w.state {
+            WheelState::Floor => sprites::CHEESE[((w.anim * 2.0) as usize) % 2],
+            // Rolling: the streak pose, facing the way it slides (the
+            // renderer cannot scale, so the squash-stretch is the roll streak).
+            WheelState::Slide { dir } => {
+                push(
+                    sprites::CHEESE_ROLL,
+                    w.pos.x - 2.0,
+                    w.pos.y - 2.0,
+                    dir < 0.0,
+                    false,
+                    SpriteKind::Entity,
+                );
+                continue;
+            }
+        };
+        push(f, w.pos.x - 2.0, w.pos.y - 2.0, false, false, SpriteKind::Entity);
+    }
+    for c in &g.cows {
+        let f =
+            if c.browsing() { sprites::COW_BROWSE } else { sprites::COW_WALK[((c.anim * 6.0) as usize) % 2] };
+        push(f, c.pos.x - 1.0, c.pos.y - 4.0, c.dir > 0.0, false, SpriteKind::Entity);
+    }
     if let Some((f, x, y, flip_x, flip_y)) = hero_sprite(g) {
         push(f, x, y, flip_x, flip_y, SpriteKind::Hero);
+        // Carrying: the wheel rides in front of the hero's chest hand.
+        if g.player.cheese {
+            let (ox, oy) = if g.player.facing > 0.0 { (14.0, -10.0) } else { (-16.0, -10.0) };
+            push(
+                sprites::CHEESE[0],
+                g.player.pos.x + ox,
+                g.player.pos.y + oy,
+                false,
+                false,
+                SpriteKind::Entity,
+            );
+        }
     }
     for p in g.particles_list() {
         let t = p.t();

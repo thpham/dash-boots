@@ -35,20 +35,23 @@ OUTLINE = C('#20142c')
 # Hero (16x24 frames, facing right)
 # --------------------------------------------------------------------------
 
+# Swiss mountaineer: alpine felt hat with an edelweiss dot, red shirt held by
+# brown suspenders over leather pants.
 HERO_PAL = {
     'K': OUTLINE,
-    'C': C('#28b0a0'),  # jacket / cap
-    'c': C('#16786e'),
-    'W': C('#f4f4f4'),
+    'C': C('#5a6a48'),  # alpine felt hat
+    'c': C('#465438'),  # hat brim
+    'W': C('#f8f8e8'),  # edelweiss dot (head row only)
     'S': C('#f6c18c'),  # skin
     's': C('#d08a5a'),
     'H': C('#5a2e18'),  # hair
-    'Y': C('#f8d040'),  # scarf
-    'y': C('#c89820'),
-    'P': C('#4a4a62'),  # pants
+    'R': C('#c83a2a'),  # red shirt
+    'r': C('#8a2418'),
+    'V': C('#5a3018'),  # suspenders
+    'P': C('#6a4a30'),  # leather pants
     'B': C('#8a5030'),  # boots
 }
-HERO_BOOTS_PAL = dict(HERO_PAL, B=C('#ff5a3a'), P=C('#4a4a62'))
+HERO_BOOTS_PAL = dict(HERO_PAL, B=C('#ff5a3a'), P=C('#6a4a30'))
 
 HEAD = [
     "................",
@@ -65,6 +68,10 @@ HEAD = [
     "....KsSSSSSKKK..",
     ".....KKSSSSK....",
 ]
+
+# The scarf/jacket silhouettes are kept; the mountaineer's outfit is a
+# character remap: jacket -> red shirt, scarf -> the suspender band.
+ALPINE = str.maketrans({'C': 'R', 'c': 'r', 'Y': 'V', 'y': 'V'})
 
 TORSO_IDLE = [
     "....KYYYYYYK....",
@@ -140,7 +147,7 @@ BLANK = "................"
 
 
 def hero_frame(torso, legs):
-    rows = HEAD + torso + legs
+    rows = HEAD + [r.translate(ALPINE) for r in torso] + legs
     assert len(rows) == 24
     return rows
 
@@ -153,6 +160,7 @@ def hero_crouch():
         "..KKKKK..KKKKK..",
     ]
     assert len(rows) == 24
+    rows[21] = rows[21].translate(ALPINE)  # scarf -> suspender band
     return rows
 
 
@@ -164,6 +172,7 @@ def hero_slide():
         "...KKKKKKKKKKKKK",
     ]
     assert len(rows) == 24
+    rows[21] = rows[21].translate(ALPINE)  # jacket -> red shirt
     return rows
 
 
@@ -184,12 +193,16 @@ HERO_FRAMES = [
 # Enemy "Grumble" (16x16)
 # --------------------------------------------------------------------------
 
+# The alpine walker is a marmot: brown-grey fur, a cream face and belly,
+# dark nose and claws (the "whistle" cheeks fold into walk frame 1).
 ENEMY_PAL = {
     'K': OUTLINE,
-    'M': C('#9a52c8'),
-    'm': C('#5e2a86'),
-    'W': C('#f4f4f4'),
-    'F': C('#f0a840'),
+    'M': C('#8a7462'),  # fur
+    'm': C('#6a584a'),
+    'W': C('#c8b8a0'),  # face / belly patch
+    'E': C('#f4f4f4'),  # eyes
+    'N': C('#4a3a30'),  # nose + claws
+    'F': C('#6a584a'),  # feet
 }
 
 ENEMY_BODY = [
@@ -200,13 +213,14 @@ ENEMY_BODY = [
     "..KMMMMMMMMMMK..",
     ".KMmMMMMMMMMmMK.",
     ".KMKKMMMMMMKKMK.",
-    "KMMMKKWMMWKKMMMK",
-    "KMMMWKWMMWKWMMMK",
-    "KMMMWWWMMWWWMMMK",
-    "KmMMMMMMMMMMMMmK",
+    "KMMMKKEMMEKKMMMK",
+    "KMMMWKEWWENWWMMK",
+    "KMMMWWWNNWWWMMMK",
+    "KmMWWWWWWWWWWMmK",
     ".KmMMKKKKKKMMmK.",
     "..KmmmmmmmmmmK..",
 ]
+assert all(len(r) == 16 for r in ENEMY_BODY)
 ENEMY_WALK1 = ENEMY_BODY + [
     "...KKFFKKFFKK...",
     "..KFFFFKKFFFFK..",
@@ -226,6 +240,155 @@ ENEMY_SQUASH = [BLANK] * 9 + [
     ".KKFFKKKKKKFFKK.",
     "..KKK......KKK..",
 ]
+
+# --------------------------------------------------------------------------
+# Goat: white alpine goat with a bell, carrying its cheese wheel on its back.
+# --------------------------------------------------------------------------
+
+GOAT_PAL = {
+    'K': OUTLINE,
+    'G': C('#e8e4dc'),  # hide
+    'g': C('#c8b8a0'),  # shading
+    'E': C('#20142c'),  # eyes
+    'B': C('#f0b030'),  # bell
+    'F': C('#f4c052'),  # wheel cheese
+    'f': C('#8a5018'),  # wheel rind
+}
+
+GOAT_BODY = [
+    "................",
+    "................",
+    ".....KfFFfK.....",
+    ".....KfFFfK.....",
+    "....KKffffKK....",
+    "...KKGGGGKK.....",
+    "..KGGGGGGGGKK...",
+    ".KGgEKGKKKEGgK..",
+    ".KGgGGGGGGGggK..",
+    ".KGBBBBBBBBGgK..",
+    "KGgGGGGGGGGGgGK.",
+    "KGgGGGGGGGGGgGK.",
+    ".KggGGGGGGGGgK..",
+]
+assert all(len(r) == 16 for r in GOAT_BODY)
+GOAT_WALK1 = GOAT_BODY + [
+    "...KKggKKggKK...",
+    "..KgggKKggggK...",
+    "..KKKK..KKKKK...",
+]
+GOAT_WALK2 = GOAT_BODY + [
+    "...KKggKKggKK...",
+    "...KgggKKgggK...",
+    "...KKKK..KKKK...",
+]
+GOAT_DAZED = [BLANK] * 5 + [
+    "....KKKKKKKK....",
+    "..KKGGGGGGGGKK..",
+    ".KGgEKGKKKEGgK..",
+    ".KGBBfffffffBGK.",
+    ".KGgKFFFFFFKKgK.",
+    "..KgKKFFFFFFKK..",
+    ".KKKKKKKKKKKKKK.",
+]
+
+# --------------------------------------------------------------------------
+# Cheese wheels (16x16): a round alpage wheel — cream highlight, rind ring,
+# hole facets. Frame 2 twinkles the highlight aside; the rolling pose gets a
+# motion streak.
+# --------------------------------------------------------------------------
+
+CHEESE_C = C('#f4c052')
+CHEESE_RIND = C('#8a5018')
+CHEESE_HI = C('#fceeb0')
+
+
+def draw_cheese(cv, ox, oy, hi=None, rolling=False):
+    for y in range(16):
+        for x in range(16):
+            d = math.hypot(x + 0.5 - 8, y + 0.5 - 8)
+            if d > 5.4:
+                continue
+            if d > 4.1:
+                col = CHEESE_RIND
+            elif d < 0.9:
+                col = CHEESE_HI
+            else:
+                col = CHEESE_C
+            cv.set(ox + x, oy + y, col)
+    # Hole facets (Swiss cheese) at fixed offsets.
+    for (hx, hy) in [(5, 10), (10, 6), (8, 12)]:
+        cv.set(ox + hx, oy + hy, CHEESE_RIND)
+        cv.set(ox + hx - 1, oy + hy, CHEESE_RIND)
+        cv.set(ox + hx, oy + hy - 1, CHEESE_C)
+    # Twinkle highlight (floor frames) / motion streak (rolling).
+    if rolling:
+        for y in range(oy + 4, oy + 12):
+            cv.set(ox + 2, y, CHEESE_HI)
+            cv.set(ox + 3, y, CHEESE_HI if y % 2 == 0 else CHEESE_C)
+    elif hi:
+        cv.rect(ox + hi[0], oy + hi[1], 2, 1, CHEESE_HI)
+
+
+# --------------------------------------------------------------------------
+# Decor cows (16x16): white holstein with dark patches, pink muzzle; the
+# browse pose puts the head down into the grass.
+# --------------------------------------------------------------------------
+
+COW_PAL = {
+    'K': OUTLINE,
+    'W': C('#f4f4f4'),  # hide
+    'p': C('#4a4a62'),  # patches
+    'M': C('#e8b8b8'),  # muzzle
+    'H': C('#d8d0a0'),  # horns
+    'E': C('#20142c'),  # eyes
+}
+
+COW_BODY = [
+    "..KH......HK....",
+    "..KKKKKKKKKK....",
+    ".KWWWWWWWWWWK...",
+    ".KWpWWWWWWpWK...",
+    "KWWEKWWWWKEWWK..",
+    "KWWWWKMMKWWWWK..",
+    "KWpWpKMMKpWpWK..",
+    "KWWWWKMMKWWWWK..",
+    "KWWpWWWWWWWWWK..",
+    "KWpWWWWWWpWWKK..",
+    "KWWWWWWWWWWWK...",
+    ".KWWpWWWWpWK....",
+    "..KWWWWWWWK.....",
+]
+assert all(len(r) == 16 for r in COW_BODY)
+COW_WALK1 = COW_BODY + [
+    "...KKppKKppKK...",
+    "..KpppKKppppK...",
+    "..KKKK..KKKKK...",
+]
+COW_WALK2 = COW_BODY + [
+    "...KKppKKppKK...",
+    "...KpppKKpppK...",
+    "...KKKK..KKKK...",
+]
+COW_BROWSE = [
+    "................",
+    "................",
+    "................",
+    "................",
+    "..KH......HK....",
+    "..KKKKKKKKKK....",
+    ".KWWWWWWWWWWK...",
+    ".KWpWWWWWWpWK...",
+    ".KWWWWWWWWWWK...",
+    ".KWKWWMMWWKKW...",
+    "KKKKWWMMWWKKKK..",
+    "KWWWWWWWWWWWWK..",
+    "KWWpWWWWWWpWWK..",
+] + [
+    "...KKppKKppKK...",
+    "..KpppKKppppK...",
+    "..KKKK..KKKKK...",
+]
+assert len(COW_BROWSE) == 16 and all(len(r) == 16 for r in COW_BROWSE)
 
 # --------------------------------------------------------------------------
 # Items
@@ -290,7 +453,7 @@ def draw_coin(cv, ox, oy, squeeze):
 
 
 def draw_goal(cv, ox, oy):
-    """16x48 goal flagpole with a star on top and a big checkered flag."""
+    """16x48 goal flagpole with a star on top and the Swiss flag."""
     pole = C('#d8d8e8')
     pole_dark = C('#8888a8')
     for y in range(6, 46):
@@ -311,15 +474,25 @@ def draw_goal(cv, ox, oy):
         "KK...KK",
     ]
     cv.grid(star, {'K': OUTLINE, 'Y': C('#ffe040')}, ox + 1, oy)
-    # Flag (checkered), to the right of the pole.
-    for y in range(7, 19):
-        for x in range(7, 16):
-            edge = x == 15 or y == 7 or y == 18
-            if edge:
-                cv.set(ox + x, oy + y, OUTLINE)
-            else:
-                checker = ((x - 7) // 2 + (y - 7) // 2) % 2 == 0
-                cv.set(ox + x, oy + y, C('#f4f4f4') if checker else C('#e04848'))
+    # Flag: the Swiss one — red square, white cross (arms 3/9 of the side).
+    flag = [
+        "KKKKKKKKK",
+        "KRRWWWRRK",
+        "KRRWWWRRK",
+        "KWWWWWWWK",
+        "KWWWWWWWK",
+        "KWWWWWWWK",
+        "KRRWWWRRK",
+        "KRRWWWRRK",
+        "KKKKKKKKK",
+    ]
+    cv.grid(flag, {'K': OUTLINE, 'R': SWISS_RED, 'W': C('#ffffff')}, ox + 7, oy + 7)
+    # The goal flies the Swiss flag: red field, white cross — pinned here so
+    # the goal can never regress into a generic pennant.
+    assert cv.get(ox + 8, oy + 9) == SWISS_RED, 'the goal flag flies Swiss red'
+    assert cv.get(ox + 8, oy + 11) == C('#ffffff'), 'the goal flag bears the white cross'
+    assert cv.get(ox + 11, oy + 9) == C('#ffffff'), 'the goal flag bears the white cross'
+    assert cv.get(ox + 8, oy + 14) == SWISS_RED, 'the goal flag flies red down to its corner'
 
 
 def draw_checkpoint(cv, ox, oy, active, wave):
@@ -433,6 +606,17 @@ def build_sprites():
     draw_checkpoint(cv, 32, 64, True, False)
     draw_checkpoint(cv, 48, 64, True, True)
     draw_particles(cv, 64, 64)
+    # Swiss livestock row (y=64): goat, then cheese wheels.
+    cv.grid(GOAT_WALK1, GOAT_PAL, 128, 64)
+    cv.grid(GOAT_WALK2, GOAT_PAL, 144, 64)
+    cv.grid(GOAT_DAZED, GOAT_PAL, 160, 64)
+    draw_cheese(cv, 176, 64, hi=(11, 3))
+    draw_cheese(cv, 192, 64, hi=(4, 3))
+    draw_cheese(cv, 208, 64, rolling=True)
+    # Decor livestock row (y=80): cows.
+    cv.grid(COW_WALK1, COW_PAL, 128, 80)
+    cv.grid(COW_WALK2, COW_PAL, 144, 80)
+    cv.grid(COW_BROWSE, COW_PAL, 160, 80)
     for i, fr in enumerate(RIFT_FRAMES):
         draw_rift(cv, 16 + i * 16, 96, *fr)
     return cv
@@ -515,6 +699,10 @@ def tile_stone(cv, ox, oy):
         cv.set(ox + i, oy + 15, dark)
         cv.set(ox + 15, oy + i, dark)
     cv.rect(ox + 4, oy + 4, 8, 8, C('#a8b0c8'))
+    # Granite grain: salt-and-pepper speckles at fixed offsets.
+    for (x, y) in [(2, 5), (6, 3), (9, 7), (13, 6), (5, 10), (10, 11), (12, 9), (3, 12)]:
+        cv.set(ox + x, oy + y, hi if (x + y) % 2 == 0 else dark)
+        cv.set(ox + x + 1, oy + y, base)
     for (x, y) in [(2, 2), (13, 2), (2, 13), (13, 13)]:
         cv.set(ox + x, oy + y, dark)
 
@@ -529,6 +717,12 @@ def tile_plank(cv, ox, oy, part):
             elif y == 6:
                 col = dark
             cv.set(ox + x, oy + y, col)
+    # Chalet wood grain: vertical streaks and a knot.
+    for (x, ys) in [(4, (1, 4)), (6, (2, 4)), (10, (1, 3))]:
+        for y in ys:
+            cv.set(ox + x, oy + y, dark if y % 2 == 0 else base)
+    cv.rect(ox + 7, oy + 2, 2, 2, dark)
+    cv.set(ox + 7, oy + 2, hi)
     # Rope/bolt details and end caps.
     if part == 'left':
         for y in range(7):
@@ -586,11 +780,12 @@ def tile_bush(cv, ox, oy, side):
 
 
 def tile_flower(cv, ox, oy):
-    stem = C('#2a8a38')
+    stem = C('#4a7038')
     for y in range(9, 16):
         cv.set(ox + 7, oy + y, stem)
     cv.set(ox + 6, oy + 12, stem)
     cv.set(ox + 5, oy + 11, stem)
+    # Edelweiss: a fluffy white star with a gold heart.
     petals = [
         ".KKK.",
         "KPPPK",
@@ -598,7 +793,7 @@ def tile_flower(cv, ox, oy):
         "KPPPK",
         ".KKK.",
     ]
-    cv.grid(petals, {'K': C('#a02050'), 'P': C('#f870a0'), 'Y': C('#ffe040')}, ox + 5, oy + 5)
+    cv.grid(petals, {'K': C('#8a8a70'), 'P': C('#f8f8e8'), 'Y': C('#e0a020')}, ox + 5, oy + 5)
 
 
 def tile_tuft(cv, ox, oy):
@@ -620,6 +815,15 @@ def tile_fence(cv, ox, oy):
             if cv.get(ox + x, oy + ry)[3] == 0:
                 cv.set(ox + x, oy + ry, wood)
                 cv.set(ox + x, oy + ry + 1, dark)
+    # A Swiss-flower touch: a red geranium pot hanging on the lower rail.
+    pot = [
+        ".KK.",
+        "KRRK",
+        "KWRK",
+        ".KK.",
+    ]
+    cv.grid(pot, {'K': C('#6a4020'), 'R': C('#d84048'), 'W': C('#fff0f0')}, ox + 6, oy + 8)
+    cv.rect(ox + 5, oy + 12, 4, 2, C('#8a6a40'))
 
 
 def tile_sign(cv, ox, oy):
@@ -627,16 +831,17 @@ def tile_sign(cv, ox, oy):
     for y in range(9, 16):
         cv.set(ox + 7, oy + y, dark)
         cv.set(ox + 8, oy + y, wood)
+    # Trail sign: a wood board with the hiking-trail red arrow.
     board = [
-        "KKKKKKKKKKK...",
+        "KKKKKKKKKKKK..",
         "KwwwwwwwwwwK..",
-        "KwwwwwKwwwwwK.",
-        "KwKKKKKKwwwwwK",
-        "KwwwwwKwwwwwK.",
+        "KwwwwrrrwwwwK.",
+        "KwwrrrrrrrwwK.",
+        "KwwwwrrrwwwwK.",
         "KwwwwwwwwwwK..",
-        "KKKKKKKKKKK...",
+        "KKKKKKKKKKKK..",
     ]
-    cv.grid(board, {'K': dark, 'w': wood}, ox + 1, oy + 2)
+    cv.grid(board, {'K': dark, 'w': wood, 'r': SWISS_RED}, ox + 1, oy + 2)
 
 
 def tile_rock(cv, ox, oy):
@@ -919,16 +1124,19 @@ TILE_THEMES = {
         '#78d860': '#e8c060', '#3aa040': '#b8862e', '#1e6a30': '#7c5c1c',
         '#2a8a38': '#9a7424', '#f870a0': '#ff9440', '#a02050': '#c44c14',
         '#3a2438': '#5c2030', '#2a1828': '#3a1420',
+        '#f8f8e8': '#ffd89e',  # edelweiss catches the sunset
     },
-    'cave': {  # teal moss on dark stone, crystal bushes, glow toadstools
+    'cave': {  # the fromagerie gallery: brick walls in cheese tones, lantern-warm walls
+        '#d0603a': '#f4c052', '#7a2a20': '#8a5018', '#f09060': '#fceeb0',  # brick -> cheese wheel + shelf wood
+        '#3a2438': '#4a2a28', '#2a1828': '#301a18',  # cave wall: lantern-warm
         '#9ce858': '#5ae0c0', '#4cba34': '#2a9a80', '#2a7a28': '#1a6a56',
         '#c47a3a': '#5c5674', '#8a5028': '#3c3652', '#e0a060': '#7e7694', '#5a3018': '#221e34',
         '#9098b0': '#707692', '#4a5068': '#424a66', '#d0d8e8': '#9aa2ba', '#a8b0c8': '#7e86a0',
         '#78d860': '#50d8d0', '#3aa040': '#30a0a0', '#1e6a30': '#1e6a6e',
         '#2a8a38': '#38688c', '#f870a0': '#7ce8ff', '#a02050': '#2c7ac8', '#ffe040': '#eaffff',
-        '#3a2438': '#46295a', '#2a1828': '#301c44',
         '#a0a0b0': '#767696', '#585868': '#444460', '#d8d8e0': '#a0a0c4',
         '#f0b030': '#b878f0', '#8a5010': '#6a30a0', '#fff0a0': '#e8bcff',
+        '#f8f8e8': '#b2e8e0',
     },
     'night': {  # moonlit frost grass, cold dirt, violet brick
         '#9ce858': '#8fd8c0', '#4cba34': '#3f9a80', '#2a7a28': '#266a58',
@@ -937,8 +1145,27 @@ TILE_THEMES = {
         '#78d860': '#74c8d4', '#3aa040': '#3f8f96', '#1e6a30': '#2c606a',
         '#2a8a38': '#33627a', '#f870a0': '#d8e8ff', '#a02050': '#6a7ac0', '#ffe040': '#ffffff',
         '#3a2438': '#22284a', '#2a1828': '#141832',
+        '#f8f8e8': '#d8e8f8',  # edelweiss keeps a pale glint
     },
 }
+
+
+SWISS_RED = C('#d81f26')
+SWISS_FLAGS = True  # the alps get their summit flags
+
+
+def decorate_summit_flags(cv):
+    """Two tiny Swiss flags on the tallest far-range summit peaks (<= 7 px)."""
+    for px, top in [(64, 44), (200, 40)]:
+        # Find the actual ridge height under the flag's pixel column.
+        for y in range(30, 120):
+            if cv.get(px, y)[3] != 0:
+                top = y
+                break
+        cv.set(px, top - 1, OUTLINE)              # pole
+        cv.rect(px - 2, top - 5, 5, 4, SWISS_RED)  # flag body
+        cv.set(px, top - 4, C('#ffffff'))         # cross
+        cv.set(px, top - 3, C('#ffffff'))
 
 
 def build_bg_far(sky=MEADOW_SKY, span=130.0):
@@ -971,11 +1198,13 @@ def build_bg_far(sky=MEADOW_SKY, span=130.0):
                             shade = True
                 if inside and y < cy + 5:
                     cv.set(xr % w, y, C('#d8e8f8') if shade else C('#ffffff'))
-    # Two mountain ranges made of wrapped triangular peaks (snow caps on the far range).
+    # Two mountain ranges made of wrapped triangular peaks (snow caps on the
+    # far range). The Alps stand tall: heights were tuned so the summits clear
+    # the playfield's upper third and the flags fly there.
     rnd = random.Random(11)
     for (count, hmin, hmax, base, col, shade, snow) in [
-        (6, 50, 78, 150, C('#a8b8e8'), C('#8898d0'), True),
-        (8, 26, 46, 150, C('#7890d0'), C('#6478b8'), False),
+        (6, 66, 100, 150, C('#a8b8e8'), C('#8898d0'), True),
+        (8, 32, 52, 150, C('#7890d0'), C('#6478b8'), False),
     ]:
         peaks = [(rnd.uniform(0, w), rnd.uniform(hmin, hmax), rnd.uniform(0.7, 1.1)) for _ in range(count)]
         for x in range(w):
@@ -993,7 +1222,48 @@ def build_bg_far(sky=MEADOW_SKY, span=130.0):
                 if snow and y < top + 6 and best_peak[1] > 60 and y < base - best_peak[1] + 14:
                     c = C('#f0f4ff') if not right_side else C('#d0dcf4')
                 cv.px[y][x] = c
+    decorate_summit_flags(cv)
     return cv
+
+
+def hill_top(x):
+    """The near band's silhouette line (shared by the decor anchors)."""
+    return int(132 + periodic(x, [(2, 10, 0.0), (5, 5, 1.3), (3, 3, 2.2)]))
+
+
+# Alpine chalet (11x10): roof, walls, two lit windows. Colors are the near
+# band's own remap keys, so every theme re-tints the wood correctly; the
+# windows stay warm in every mood (lit in the evening).
+CHALET = [
+    "......KK......",
+    ".....KRRK.....",
+    "....KRRRRK....",
+    "...KRRXRRRK...",
+    "..KRRXXXRRRK..",
+    ".KRRRRXRRRRRK.",
+    "KRRRRRRRRRRRRK",
+    "KWWWWWWWWWWWWK",
+    "KWGGWWWWGGWWK.",
+    "KWWWWWWWWWWWWK",
+]
+CHALET_PAL = {
+    'K': OUTLINE,
+    'R': C('#2a7a48'),
+    'W': C('#6a4020'),
+    'G': C('#f8d040'),
+    'X': C('#ffffff'),
+}
+assert sum(row.count('X') for row in CHALET) == 5, 'the chalet gable bears a small white cross'
+
+# Grazer silhouette (8x5), facing left.
+GRAZER = [
+    "KKKK....",
+    "KKKKKK..",
+    "KKKKKKKK",
+    "K.KK..K.",
+    "........",
+]
+GRAZER_PAL = {'K': C('#2a7a48')}
 
 
 def build_bg_near():
@@ -1001,7 +1271,7 @@ def build_bg_near():
     cv = Canvas(w, h)
     rim, base, dark, darker = C('#a0e878'), C('#58c060'), C('#3a9a50'), C('#2a7a48')
     for x in range(w):
-        top = int(132 + periodic(x, [(2, 10, 0.0), (5, 5, 1.3), (3, 3, 2.2)]))
+        top = hill_top(x)
         for y in range(top, h):
             d = y - top
             if d < 2:
@@ -1011,11 +1281,22 @@ def build_bg_near():
             else:
                 col = dark if BAYER[y % 4][x % 4] > (d - 18) // 2 else darker
             cv.px[y][x] = col
+    # Chalets and grazing goats sit inside the hill band (row ~140 down), so
+    # the level's walking line never reads "on the decor".
+    rnd = random.Random(5)
+    for gx in (24, 84, 178, 268):
+        x = (gx + rnd.randrange(-6, 7)) % w
+        gy = max(142, hill_top(x) + rnd.randrange(2, 10))
+        cv.grid(GRAZER, GRAZER_PAL, x % w, gy - 4)
+    for cx in (50, 150, 250):
+        x = (cx + rnd.randrange(-5, 6)) % w
+        cy = max(138, hill_top(x) + rnd.randrange(0, 6))
+        cv.grid(CHALET, CHALET_PAL, x, cy - 10)
     # Little round trees on the hills.
     rnd = random.Random(3)
     for _ in range(9):
         tx = rnd.randrange(0, w)
-        top = int(132 + periodic(tx, [(2, 10, 0.0), (5, 5, 1.3), (3, 3, 2.2)]))
+        top = hill_top(tx)
         r = rnd.randrange(5, 9)
         for y in range(top - 2 * r - 4, top + 2):
             for xx in range(tx - r - 1, tx + r + 2):
@@ -1026,6 +1307,47 @@ def build_bg_near():
         for y in range(top - 4, top + 2):
             cv.set(tx % w, y, C('#6a4020'))
     return cv
+
+
+def decorate_night_far(cv):
+    """The night alps: a denser starfield and a fuller moon over the ridges."""
+    sky = {C(s) for s in ('#080c1e', '#0e1630', '#16264a', '#0e4058')}
+    rnd = random.Random(23)
+    star, star_dim = C('#eaf2ff'), C('#b8c6ea')
+    for _ in range(150):
+        x, y = rnd.randrange(0, 320), rnd.randrange(0, 96)
+        if cv.get(x, y) not in sky:
+            continue
+        cv.set(x, y, star)
+        if rnd.random() < 0.22:
+            cv.set(x, y + 1, star_dim)
+    # The moon: a full disc with a soft rim and two craters.
+    cx, cy, r = 262.0, 36.0, 13.0
+    for y in range(22, 51):
+        for x in range(248, 277):
+            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+            if d > r:
+                continue
+            col = C('#f4f8ff') if d > r - 2.6 else C('#e8eefc')
+            for (mx, my) in [(256, 33), (263, 40)]:
+                if (x, y) in ((mx, my), (mx + 1, my), (mx, my + 1), (mx + 1, my + 1)):
+                    col = C('#c6d2ea')
+            cv.set(x, y, col)
+
+
+def decorate_night_near(cv):
+    """A chamois pauses on the near ridge (night only)."""
+    body = C('#8fa8c0')  # moonlit: it must read against the night sky AND the ridge
+    for gx in (122, 236):
+        ft = hill_top(gx)
+        chamois = [
+            ".KK.......",
+            ".KKKK..KK.",
+            "KKKKKKKKKK",
+            "KKKKKKKKKK",
+            ".KK.KK.KK.",
+        ]
+        cv.grid(chamois, {'K': body}, gx, ft - 5)
 
 
 def assert_band_safe(stops, remap):
@@ -1057,10 +1379,14 @@ def main():
         assert_band_safe(cfg['sky'], cfg['remap'])
         far = build_bg_far(cfg['sky'], cfg['span'])
         recolor(far, cfg['remap'])
+        if theme == 'night':
+            decorate_night_far(far)
         outputs[f'bg_far_{theme}.png'] = far
     for theme, mapping in NEAR_THEMES.items():
         near = build_bg_near()
         recolor(near, mapping)
+        if theme == 'night':
+            decorate_night_near(near)
         outputs[f'bg_near_{theme}.png'] = near
     for theme, mapping in TILE_THEMES.items():
         tiles = build_tiles()

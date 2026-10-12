@@ -1,7 +1,8 @@
-//! The 13 SFX recipes, ported 1:1 from gen_audio.py (Python f64 -> f64).
-//! Python's `random.Random(seed)` noise is replaced by a deterministic
+//! The 13 core SFX recipes, ported 1:1 from gen_audio.py (Python f64 ->
+//! f64). Python's `random.Random(seed)` noise is replaced by a deterministic
 //! xorshift (see synth::Noise), so the golden tests compare RMS within a
 //! tolerance instead of sample-exact — the ear stays the final judge.
+//! The newer ids are Rust-native (bell, wheel_slide, crust, moo).
 
 use super::synth::{mix_into, note_freq, notes, pulse, sweep, triangle, Noise, SR};
 use crate::audio::SFX_NAMES;
@@ -138,6 +139,56 @@ fn return_warm() -> Vec<f64> {
     out
 }
 
+/// The alpine livestock chime: two struck dings an octave apart.
+fn bell() -> Vec<f64> {
+    notes(&[("E6", 0.5), ("B5", 0.7)], triangle, 0.4, 0.02)
+}
+
+/// "Meuh": a low glide with a slow chesty attack and a slight wobble — the
+/// cows' one greeting, never a chime.
+fn moo() -> Vec<f64> {
+    let dur = 0.65;
+    let n = (dur * SR) as usize;
+    let mut out = Vec::with_capacity(n);
+    let mut phase = 0.0;
+    let mut sub_phase = 0.0;
+    for i in 0..n {
+        let t = i as f64 / SR;
+        // Sliding down from a moo's "m-o" into the long "uh", with a soft
+        // 5 Hz wobble (like the jaw letting go).
+        let f = 170.0 - 55.0 * (t / dur).powf(0.8) + 6.0 * (std::f64::consts::TAU * 5.0 * t).sin();
+        phase += f / SR;
+        // A sub-octave rumble under the glide, for chestiness.
+        sub_phase += (85.0 - 27.5 * (t / dur).powf(0.8)) / SR;
+        let env = (t / 0.12).min(1.0) * (1.0 - (t / dur).powf(2.0));
+        out.push(triangle(phase) * 0.65 * env + triangle(sub_phase) * 0.35 * env);
+    }
+    out
+}
+
+/// A rolling cheese wheel: wooden rattle — LP-smoothed noise taps at ~11 Hz.
+fn wheel_slide() -> Vec<f64> {
+    let mut nz = Noise::new(11);
+    let n = (0.35 * SR) as usize;
+    let mut lp = 0.0;
+    let mut out: Vec<f64> = Vec::with_capacity(n);
+    for i in 0..n {
+        let rattle = 0.5 + 0.5 * (std::f64::consts::TAU * 11.0 * i as f64 / SR).sin();
+        lp += (nz.sample(12000.0) - lp) * (0.6 - 0.5 * i as f64 / n as f64);
+        out.push(lp * 0.65 * (1.0 - i as f64 / n as f64) * rattle);
+    }
+    out
+}
+
+/// The crust settles: a 60 ms noise crunch over a low thud sweep.
+fn crust() -> Vec<f64> {
+    let mut nz = Noise::new(3);
+    let n = (0.06 * SR) as usize;
+    let crunch: Vec<f64> =
+        (0..n).map(|i| nz.sample(9000.0) * 0.9 * (1.0 - i as f64 / n as f64).powi(2)).collect();
+    mix_into(sweep(0.13, 190.0, 55.0, triangle, 0.5, 10.0), &crunch, 0)
+}
+
 /// Mono raw (Python parity before normalization), in `audio::SFX_NAMES` order.
 pub fn sfx_samples(id: u8) -> Vec<f64> {
     assert!((id as usize) < SFX_NAMES.len(), "unknown sfx {id}");
@@ -155,6 +206,10 @@ pub fn sfx_samples(id: u8) -> Vec<f64> {
         10 => pause(),
         11 => rift(),
         12 => return_warm(),
+        13 => bell(),
+        14 => wheel_slide(),
+        15 => crust(),
+        16 => moo(),
         _ => unreachable!(),
     }
 }
