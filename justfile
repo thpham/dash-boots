@@ -58,3 +58,27 @@ check: lint wasm-test e2e
 
 # Alias kept from the original plan
 test: wasm-test
+
+# --- Generated levels (ENDLESS) ---------------------------------------------
+
+# Bot-labelled training corpus + vocabulary (tools/levelgen/, not committed)
+levelgen-corpus n="20000":
+  cd {{crate}} && cargo run --release --example levelgen_vocab > ../tools/levelgen/vocab.txt
+  cd {{crate}} && cargo run --release --example levelgen_corpus -- {{n}} ../tools/levelgen/corpus.txt
+
+# Where the bots fail, per motif and profile (tune the teacher with it)
+levelgen-report n="20":
+  cd {{crate}} && cargo run --release --example levelgen_report -- {{n}}
+
+# Supervised pre-training (CPU PyTorch in the training shell): sft.pt + int8 levelgen.bin
+levelgen-train:
+  nix develop .#training -c python3 -u {{web}}/tools/levelgen/train.py
+
+# GRPO against the bots (Rust rollouts, PyTorch gradients) + gated int8 export
+levelgen-rl:
+  cd {{crate}} && cargo build --release --example levelgen_rollout --example levelgen_eval
+  nix develop .#training -c python3 -u {{web}}/tools/levelgen/grpo.py
+
+# Evaluate the embedded level model (acceptance per cell, difficulty, latency)
+levelgen-eval n="20":
+  cd {{crate}} && cargo run --release --example levelgen_eval -- --n {{n}}

@@ -30,6 +30,59 @@ pub enum Phase {
     Won,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuItem {
+    Campaign,
+    Endless,
+    Continue,
+}
+
+/// Title-screen menu. CONTINUE exists only when the host reports a saved run.
+#[derive(Clone, Copy, Debug)]
+pub struct TitleMenu {
+    pub selected: MenuItem,
+    /// ENDLESS start difficulty, 1..=5.
+    pub difficulty: u8,
+    /// Level index of the saved run (shown as CONTINUE RUN n+1).
+    pub saved_run: Option<u32>,
+}
+
+impl Default for TitleMenu {
+    fn default() -> Self {
+        TitleMenu { selected: MenuItem::Campaign, difficulty: 1, saved_run: None }
+    }
+}
+
+impl TitleMenu {
+    pub fn items(&self) -> Vec<MenuItem> {
+        let mut v = vec![MenuItem::Campaign, MenuItem::Endless];
+        if self.saved_run.is_some() {
+            v.push(MenuItem::Continue);
+        }
+        v
+    }
+
+    fn step(&mut self, delta: i32) {
+        let items = self.items();
+        let i = items.iter().position(|m| *m == self.selected).unwrap_or(0) as i32;
+        self.selected = items[(i + delta).rem_euclid(items.len() as i32) as usize];
+    }
+}
+
+/// Endless-run info the host pushes for the HUD, clear and pause screens.
+#[derive(Clone, Debug)]
+pub struct RunHud {
+    /// 0-based level index in the run.
+    pub n: u32,
+    pub difficulty: u8,
+    pub seed: u32,
+    pub start: u8,
+    /// Best score (levels cleared) before this run's current level.
+    pub best: u32,
+    /// "NEXT: D4 CAVE".
+    pub next: String,
+}
+
 fn feet(p: SpawnPoint) -> Vec2 {
     Vec2::new(p.x, p.y)
 }
@@ -70,6 +123,10 @@ pub struct Game {
     pub music: u8,
     /// Last level of the campaign: the clear prompt adapts ("THE END").
     pub last_level: bool,
+    /// Title-screen menu (campaign / endless / continue).
+    pub menu: TitleMenu,
+    /// Endless-run info for the HUD (None in the campaign).
+    pub run_hud: Option<RunHud>,
     /// `LevelClear` already emitted on this clear screen (the host decides what
     /// happens next; extra presses must stay silent).
     cleared_emitted: bool,
@@ -125,6 +182,8 @@ impl Game {
             frame: 0,
             music: MUSIC_LEVEL1,
             last_level: false,
+            menu: TitleMenu::default(),
+            run_hud: None,
             cleared_emitted: false,
             input: InputTracker::default(),
             timestep: FixedTimestep::new(60.0),
@@ -143,6 +202,12 @@ impl Game {
 
     pub fn set_last_level(&mut self, last: bool) {
         self.last_level = last;
+    }
+
+    /// Buttons the player still holds when this game takes over from another
+    /// one (host level swap): they must not count as fresh presses.
+    pub fn hold_buttons(&mut self, held: InputState) {
+        self.input.prime(held);
     }
 
     /// Start playing immediately (skips the title screen).
@@ -171,8 +236,9 @@ impl Game {
         // after building us — a mid-campaign restart must not lose them).
         let (input, timestep, frame) = (self.input, self.timestep, self.frame);
         let (music, last_level) = (self.music, self.last_level);
+        let (menu, run_hud) = (self.menu, self.run_hud.take());
         let audio = std::mem::take(&mut self.audio);
-        *self = Game { input, timestep, frame, music, last_level, audio, ..fresh };
+        *self = Game { input, timestep, frame, music, last_level, menu, run_hud, audio, ..fresh };
         self.start();
     }
 
@@ -249,8 +315,21 @@ impl Game {
 
         match self.phase {
             Phase::Title => {
+                if b.up_pressed || b.down_pressed {
+                    self.menu.step(if b.down_pressed { 1 } else { -1 });
+                    self.sfx(Sfx::Coin);
+                }
+                if self.menu.selected == MenuItem::Endless && (b.left_pressed || b.right_pressed) {
+                    let d = self.menu.difficulty as i32 + if b.right_pressed { 1 } else { -1 };
+                    self.menu.difficulty = d.clamp(1, 5) as u8;
+                    self.sfx(Sfx::Coin);
+                }
                 if b.start_pressed || b.jump_pressed {
-                    self.start();
+                    match self.menu.selected {
+                        MenuItem::Campaign => self.start(),
+                        MenuItem::Endless => self.audio.push(AudioEvent::StartEndless),
+                        MenuItem::Continue => self.audio.push(AudioEvent::ContinueRun),
+                    }
                 }
                 self.particles.update(DT);
             }

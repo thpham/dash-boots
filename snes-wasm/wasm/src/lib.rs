@@ -6,6 +6,7 @@ pub mod audio;
 pub mod c_heap;
 pub mod game;
 pub mod input;
+pub mod levelgen;
 pub mod math;
 pub mod music;
 
@@ -239,5 +240,97 @@ impl GameHandle {
     /// Whether this is the campaign's last level (adapts the clear-screen text).
     pub fn set_last_level(&mut self, last: bool) {
         self.game.set_last_level(last);
+    }
+
+    /// Saved endless run level index, or -1 for none (shows CONTINUE).
+    pub fn set_saved_run(&mut self, n: i32) {
+        self.game.menu.saved_run = (n >= 0).then_some(n as u32);
+        if self.game.menu.saved_run.is_none() && self.game.menu.selected == game::MenuItem::Continue {
+            self.game.menu.selected = game::MenuItem::Campaign;
+        }
+    }
+
+    /// Preselect a menu item (0 campaign, 1 endless, 2 continue) and the endless difficulty.
+    pub fn preset_menu(&mut self, item: u8, difficulty: u8) {
+        self.game.menu.selected = match item {
+            1 => game::MenuItem::Endless,
+            2 if self.game.menu.saved_run.is_some() => game::MenuItem::Continue,
+            _ => game::MenuItem::Campaign,
+        };
+        self.game.menu.difficulty = difficulty.clamp(1, 5);
+    }
+
+    pub fn menu_difficulty(&self) -> u8 {
+        self.game.menu.difficulty
+    }
+
+    pub fn set_run_hud(&mut self, n: u32, difficulty: u8, seed: u32, start: u8, best: u32, next: &str) {
+        self.game.run_hud = Some(game::RunHud { n, difficulty, seed, start, best, next: next.to_string() });
+    }
+
+    /// Buttons still held from the previous handle (bitmask, see `input.rs`):
+    /// call right after building a swapped-in level, before `restart()`.
+    pub fn hold_buttons(&mut self, buttons: u32) {
+        self.game.hold_buttons(input::InputState::from_bits(buttons));
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.game.paused
+    }
+}
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn warn(s: &str);
+}
+
+/// ENDLESS mode: level n of a run, generated in-wasm (model → teacher →
+/// campaign fallback). The host loads `level_json(n)` like a shipped map.
+#[wasm_bindgen]
+pub struct EndlessRun {
+    run: levelgen::run::Run,
+    model: Option<levelgen::model::Model>,
+    last_source: String,
+}
+
+#[wasm_bindgen]
+impl EndlessRun {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: u32, start: u8) -> EndlessRun {
+        let model = match levelgen::model::Model::embedded() {
+            Ok(m) => Some(m),
+            Err(e) => {
+                warn(&format!("level model unavailable, using the teacher: {e}"));
+                None
+            }
+        };
+        EndlessRun { run: levelgen::run::Run { seed, start }, model, last_source: String::new() }
+    }
+
+    pub fn model_ok(&self) -> bool {
+        self.model.is_some()
+    }
+
+    pub fn difficulty(&self, n: u32) -> u8 {
+        self.run.difficulty(n)
+    }
+
+    /// Theme index 0..3 (= campaign theme and music track id).
+    pub fn theme(&self, n: u32) -> u8 {
+        self.run.theme(n).index() as u8
+    }
+
+    pub fn level_json(&mut self, n: u32) -> String {
+        let lvl = self.run.level(n, self.model.as_ref());
+        self.last_source = match lvl.source {
+            levelgen::run::Source::Model(tries) => format!("model:{tries}"),
+            levelgen::run::Source::Teacher => "teacher".into(),
+            levelgen::run::Source::Handmade => "handmade".into(),
+        };
+        lvl.level.to_tiled_json()
+    }
+
+    pub fn last_source(&self) -> String {
+        self.last_source.clone()
     }
 }

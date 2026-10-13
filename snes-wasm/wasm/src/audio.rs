@@ -10,6 +10,11 @@
 /// browser host decides what happens next (load the next level, or replay).
 pub const LEVEL_CLEAR: u8 = 250;
 
+/// Host signals from the title menu: start a new endless run (difficulty via
+/// `GameHandle::menu_difficulty`) / continue the saved one.
+pub const START_ENDLESS: u8 = 249;
+pub const CONTINUE_RUN: u8 = 248;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Sfx {
@@ -76,6 +81,8 @@ pub enum AudioEvent {
     StopMusic,
     MusicFuture(bool),
     LevelClear,
+    StartEndless,
+    ContinueRun,
 }
 
 impl AudioEvent {
@@ -87,6 +94,8 @@ impl AudioEvent {
             AudioEvent::ResumeMusic => MUSIC_RESUME,
             AudioEvent::StopMusic => MUSIC_STOP,
             AudioEvent::LevelClear => LEVEL_CLEAR,
+            AudioEvent::StartEndless => START_ENDLESS,
+            AudioEvent::ContinueRun => CONTINUE_RUN,
             AudioEvent::MusicFuture(on) => {
                 if on {
                     MUSIC_FUTURE_ON

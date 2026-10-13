@@ -16,9 +16,9 @@ and published by GitHub Actions on `v*` tags (deploy-pages workflow).
 
 | Path | What it is |
 |---|---|
-| `snes-wasm/` | The game (simulation crate, web platform layer, levels) |
+| `snes-wasm/` | The game (simulation crate, web platform layer, levels, endless generated levels) |
 | `snes-wasm/wasm/` | Rust crate compiled to WASM (physics, rules, Tiled parser, bot) |
-| `snes-wasm/tools/` | Stdlib-only Python generators for the original art, audio and level |
+| `snes-wasm/tools/` | Stdlib-only Python generators for the original art, audio and level; `levelgen/` trains the endless-mode model (PyTorch, `nix develop .#training`) |
 | `flake.nix` | The dev environment (rust, wasm-pack, node, chromium) — used identically in CI |
 | `.github/workflows/` | Publishing CI: GitHub Pages deployment on `v*` tags |
 

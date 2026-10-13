@@ -36,6 +36,8 @@ export type Input = {
   poll(): number;
   /** Release everything (focus lost). */
   reset(): void;
+  /** Buttons held right now, without consuming latched taps (level swaps). */
+  held(): number;
 };
 
 export function createInput(target: Window = window): Input {
@@ -90,5 +92,6 @@ export function createInput(target: Window = window): Input {
       return bits;
     },
     reset,
+    held: () => held | pollGamepad(),
   };
 }

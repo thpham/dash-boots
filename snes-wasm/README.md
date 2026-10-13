@@ -24,6 +24,59 @@ Finishing a level flows straight into the next; the whole run is saved in
 `localStorage` (`dash-boots-progress`), so refreshing the page resumes at the
 right level. Progress storage is skipped when a `?level=` override is used.
 
+## Endless mode (generated levels)
+
+The title screen offers **CAMPAIGN** or **ENDLESS** (↑/↓ to choose, ←/→ for the
+start difficulty D1–D5, Enter/Space to start) and **CONTINUE RUN n** when a run
+is saved. An endless run never ends: every cleared level generates the next one,
+the difficulty rises by one step every two levels (up to D5) and the theme cycles
+meadow → sunset → cave → night with its music. The HUD shows `RUN n Dd`, the clear
+screen your best score (levels cleared) and what comes next.
+
+- **Share a run:** the pause screen shows the run seed and start difficulty;
+  `?seed=N&start=D` opens the title with that run preselected — the same seed
+  gives the same levels in any browser.
+- **Quit a run:** pause, then `T`. A refresh mid-run resumes it (CONTINUE).
+- Storage: `dash-boots-run` (current run) and `dash-boots-best`, next to the
+  untouched campaign progress.
+
+### How levels are generated
+
+Everything happens in the wasm, with zero network fetch:
+
+1. A level is written as `<theme> <difficulty>` followed by ~25 **motifs**
+   (`gap3`, `walk2`, `marsh`, `tunnel5`, `rift_out`, …) — `wasm/src/levelgen/motif.rs`.
+2. A **tiny transformer** (460k parameters, ~480 KB of int8 weights embedded in
+   the wasm, `wasm/assets/levelgen.bin`) samples the motifs one by one, ~8 ms per
+   level. A **grammar** masks every motif that would be illegal where it stands
+   (height bounds, cave ceiling and jump clearance, intro zone, checkpoint spacing,
+   paired rift excursions with their runways, one pair of boots, length) — and it
+   is proven never to dead-end (`compile.rs`).
+3. The motifs **compile** to tiles and a regular Tiled map.
+4. A **bot** of the requested skill must finish it; otherwise the model tries
+   again (8 tries), then the section teacher, then the campaign level of that
+   theme — there is always a level (`run.rs`).
+
+Five graded bots (novice → expert, `bot.rs`) are both the critic and the
+difficulty meter: a level's difficulty is the weakest bot that finishes it.
+D1..D5 are therefore *bot* skills, ordered like the campaign but not calibrated
+on human players.
+
+### Retraining the level model
+
+```
+just levelgen-corpus      # ~20k bot-labelled levels: campaign mutations + section teacher (tools/levelgen/, not committed)
+just levelgen-report      # where the bots fail, per motif and skill (tune teacher.rs with it)
+just levelgen-train       # supervised pre-training (nix develop .#training, CPU PyTorch, ~2 min)
+just levelgen-rl          # GRPO against the bots + int8 export gated on acceptance (~12 min)
+just levelgen-eval        # acceptance per (theme, difficulty), monotonic difficulty, latency
+```
+
+The training shell (`nix develop .#training`) is the game shell plus CPU
+PyTorch; the default shell and CI never pull it. **Editing `motif.rs` changes
+the vocabulary: rerun the whole sequence** — until the weights match, the game
+falls back to the teacher.
+
 ## Play
 
 From the repo root (direnv loads the nix devShell automatically, or run `nix develop` first):
@@ -79,6 +132,7 @@ walks up to one gets a single moo.
 | `just check` | all of the above |
 | `just assets` | regenerate the art from `tools/` (audio is synthesized in the wasm) |
 | `just level` | regenerate all `level*.json` from `tools/gen_level.py` (overwrites Tiled edits) |
+| `just levelgen-*` | endless-mode level model: corpus, report, train, rl, eval (see *Endless mode*) |
 
 ## Architecture
 

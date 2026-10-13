@@ -1,7 +1,7 @@
 // Browser host. All game logic, level parsing and render-list building live in
 // the Rust/WASM core; this file only wires the platform: assets, input, GL, audio.
 
-import initWasm, { GameHandle, render_sfx } from '../wasm/pkg/snes_wasm';
+import initWasm, { EndlessRun, GameHandle, render_sfx } from '../wasm/pkg/snes_wasm';
 import { createAudio, VOLUME_STEP } from './platform/audio';
 import { Executor, type TextureSpec } from './platform/gl/executor';
 import { createInput } from './platform/input';
@@ -15,6 +15,14 @@ const BASE = import.meta.env.BASE_URL;
 // the host should move on (next level, or replay on the last one).
 const LEVEL_CLEAR_CODE = 250;
 const SAVE_KEY = 'dash-boots-progress';
+// Reserved codes (wasm/src/audio.rs): title menu → host.
+const START_ENDLESS_CODE = 249;
+const CONTINUE_RUN_CODE = 248;
+const HOST_CODES = new Set([LEVEL_CLEAR_CODE, START_ENDLESS_CODE, CONTINUE_RUN_CODE]);
+const RUN_KEY = 'dash-boots-run';
+const BEST_KEY = 'dash-boots-best';
+// Endless theme index (EndlessRun.theme) = campaign theme order = music id.
+const RUN_THEMES: Theme[] = ['meadow', 'sunset', 'cave', 'night'];
 
 // The campaign: one level per entry, in order. Texture ids 0/1/2 (parallax +
 // tiles) are theme-dependent; sprites and font stay shared.
@@ -48,6 +56,68 @@ function saveProgress(levelIndex: number) {
   } catch {
     // Ignore: progression simply won't survive a refresh.
   }
+}
+
+type SavedRun = { seed: number; start: number; n: number };
+
+const isU32 = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffffffff;
+
+function loadRun(): SavedRun | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(RUN_KEY) ?? 'null');
+    if (v && isU32(v.seed) && isU32(v.n) && Number.isInteger(v.start) && v.start >= 1 && v.start <= 5) {
+      return { seed: v.seed, start: v.start, n: v.n };
+    }
+  } catch {
+    // Corrupt entry: treated as no saved run.
+  }
+  return null;
+}
+
+function saveRun(r: SavedRun | null) {
+  try {
+    if (r) localStorage.setItem(RUN_KEY, JSON.stringify(r));
+    else localStorage.removeItem(RUN_KEY);
+  } catch {
+    // Ignore: the run simply won't survive a refresh.
+  }
+}
+
+function loadBest(): number {
+  try {
+    const v = parseInt(localStorage.getItem(BEST_KEY) ?? '', 10);
+    return isU32(v) ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveBest(v: number) {
+  try {
+    localStorage.setItem(BEST_KEY, String(v));
+  } catch {
+    // Ignore.
+  }
+}
+
+/** `?seed=N&start=D` presets an ENDLESS run (junk is ignored, start clamped). */
+function urlRun(): { seed: number; start: number } | null {
+  const q = new URLSearchParams(location.search);
+  if (!/^\d{1,10}$/.test(q.get('seed') ?? '')) return null;
+  const seed = Number(q.get('seed'));
+  if (!isU32(seed)) return null;
+  const s = parseInt(q.get('start') ?? '1', 10);
+  return { seed, start: Number.isInteger(s) ? Math.min(5, Math.max(1, s)) : 1 };
+}
+
+/** FNV-1a: debug fingerprint of a generated level (e2e reproducibility). */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
 }
 
 function levelUrl(index: number, name: string): string {
@@ -127,17 +197,21 @@ async function main() {
 
   // Fetching a level and building its handle: JSON, textures, music. Every
   // setting lives in the handle, so a swap re-applies them (configure()).
-  const buildGame = async (index: number, name: string) => {
-    const theme = index >= 0 ? LEVELS[index].theme : 'meadow';
+  const buildFromText = async (text: string, theme: Theme, music: number, last: boolean) => {
     const files = texturesFor(theme);
-    const text = await fetchText(levelUrl(index, name));
     const handle = new GameHandle(text, VIEW_W, VIEW_H);
-    if (index >= 0) handle.set_music(index); // in-wasm track id (rendered lazily by audio.ts)
-    handle.set_last_level(index < 0 || index === LEVELS.length - 1);
+    handle.set_music(music);
+    handle.set_last_level(last);
     const sizes = await executor.loadTextures(files);
     files.forEach((f, i) => handle.set_texture_size(f.id, sizes[i].w, sizes[i].h));
     configure(handle);
     return { handle, sizes };
+  };
+  const buildGame = async (index: number, name: string) => {
+    const theme = index >= 0 ? LEVELS[index].theme : 'meadow';
+    const text = await fetchText(levelUrl(index, name));
+    const built = await buildFromText(text, theme, Math.max(0, index), index < 0 || index === LEVELS.length - 1);
+    return built;
   };
   const configure = (game: GameHandle) => {
     game.set_viewport(viewport.w, viewport.h);
@@ -149,6 +223,12 @@ async function main() {
 
   const boot = await buildGame(currentLevel, bootLevel.name);
   game = boot.handle;
+  const presetTitle = (h: GameHandle) => {
+    h.set_saved_run(loadRun()?.n ?? -1);
+    const u = urlRun();
+    if (u) h.preset_menu(1, u.start);
+  };
+  presetTitle(game);
 
   // If the future pipeline is unavailable, the game stays in the past world.
   // Theme tilesets keep identical dimensions, so no re-call on level swaps.
@@ -167,7 +247,77 @@ async function main() {
   // Clear screen done: the sim emitted LEVEL_CLEAR. Advance (or replay on the
   // last level and on standalone ?level= launches); save progress so a
   // refresh resumes at the right level.
+  type ActiveRun = { run: EndlessRun; seed: number; start: number; n: number };
+  let active: ActiveRun | null = null;
+  const dbg = (window as unknown as { __dashboots: Record<string, unknown> }).__dashboots;
+
+  const buildRunLevel = async (r: ActiveRun) => {
+    const t0 = performance.now();
+    const text = r.run.level_json(r.n);
+    dbg.levelHash = fnv1a(text);
+    dbg.levelSource = `${r.run.last_source()} in ${(performance.now() - t0).toFixed(0)} ms`;
+    const themeId = r.run.theme(r.n);
+    audio.prerenderMusic(themeId);
+    const built = await buildFromText(text, RUN_THEMES[themeId], themeId, false);
+    const next = `NEXT: D${r.run.difficulty(r.n + 1)} ${RUN_THEMES[r.run.theme(r.n + 1)].toUpperCase()}`;
+    built.handle.set_run_hud(r.n, r.run.difficulty(r.n), r.seed, r.start, loadBest(), next);
+    return built.handle;
+  };
+
+  const enterRun = async (seed: number, start: number, n: number) => {
+    if (swapping) return;
+    swapping = true;
+    try {
+      const r: ActiveRun = { run: new EndlessRun(seed, start), seed, start, n };
+      game = await buildRunLevel(r);
+      active = r;
+      saveRun({ seed, start, n });
+      game.hold_buttons(input.held()); // a held Enter/Space is not a new press
+      game.restart(); // straight into play
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      swapping = false;
+    }
+  };
+
+  const advanceRun = async (r: ActiveRun) => {
+    if (swapping) return;
+    swapping = true;
+    try {
+      saveBest(Math.max(loadBest(), r.n + 1));
+      r.n += 1;
+      saveRun({ seed: r.seed, start: r.start, n: r.n });
+      game = await buildRunLevel(r);
+      game.hold_buttons(input.held());
+      game.restart();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      swapping = false;
+    }
+  };
+
+  const quitRunToTitle = async () => {
+    if (swapping || !active) return;
+    swapping = true;
+    try {
+      active.run.free();
+      active = null;
+      saveRun(null);
+      const idx = loadProgress();
+      game = (await buildGame(idx, LEVELS[idx].name)).handle;
+      currentLevel = idx;
+      presetTitle(game);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    } finally {
+      swapping = false;
+    }
+  };
+
   const advance = async () => {
+    if (active) return advanceRun(active);
     if (currentLevel < 0 || currentLevel + 1 >= LEVELS.length) {
       game.restart(); // replay (existing clear-screen behaviour)
       return;
@@ -187,6 +337,7 @@ async function main() {
       currentLevel = next;
       game = built.handle;
       if (!launchedFromQuery) saveProgress(next);
+      game.hold_buttons(input.held());
       game.restart(); // into play directly: the player just finished one
     } catch (err) {
       showError(err instanceof Error ? err.message : String(err));
@@ -214,6 +365,7 @@ async function main() {
     if (e.code === 'KeyM') {
       showToast(audio.toggleMute() ? 'Muted' : 'Sound on');
     }
+    if (e.code === 'KeyT' && active && game?.is_paused()) void quitRunToTitle();
     if (e.code === 'KeyC') {
       crt = !crt;
       game?.set_crt_enabled(crt);
@@ -246,7 +398,15 @@ async function main() {
     game.frame(input.poll(), dt);
     const codes = game.take_audio_events();
     if (codes.includes(LEVEL_CLEAR_CODE)) void advance();
-    audio.handle(codes.filter((c) => c !== LEVEL_CLEAR_CODE));
+    if (codes.includes(START_ENDLESS_CODE)) {
+      const u = urlRun();
+      void enterRun(u?.seed ?? (Math.random() * 0x100000000) >>> 0, game.menu_difficulty(), 0);
+    }
+    if (codes.includes(CONTINUE_RUN_CODE)) {
+      const saved = loadRun();
+      if (saved) void enterRun(saved.seed, saved.start, saved.n);
+    }
+    audio.handle(codes.filter((c) => !HOST_CODES.has(c)));
     // Views are re-created every frame: WASM memory may grow and move.
     const mem = wasm.memory.buffer;
     const frameData: FrameData = {

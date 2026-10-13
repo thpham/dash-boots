@@ -10,9 +10,8 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-      in
-      {
-        devShells.default = pkgs.mkShell {
+
+        defaultShell = pkgs.mkShell {
           packages = with pkgs; [
             just
             nodejs_24
@@ -56,6 +55,16 @@
             export CFLAGS="''${CFLAGS:+$CFLAGS }-I${self}/wasm-c-stubs"
             echo "CC = unwrapped clang, CFLAGS += -I wasm-c-stubs (wasm32 C deps)"
           '';
+        };
+      in
+      {
+        devShells.default = defaultShell;
+
+        # Level-model training (just levelgen-train / levelgen-rl): the game
+        # shell plus CPU PyTorch. Separate so CI and the daily shell stay light.
+        devShells.training = pkgs.mkShell {
+          inputsFrom = [ defaultShell ];
+          packages = [ (pkgs.python3.withPackages (ps: [ ps.torch ])) ];
         };
       });
 }

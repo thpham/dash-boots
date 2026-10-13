@@ -41,6 +41,10 @@ pub struct Buttons {
     pub jump_pressed: bool,
     pub dash_pressed: bool,
     pub start_pressed: bool,
+    pub up_pressed: bool,
+    pub down_pressed: bool,
+    pub left_pressed: bool,
+    pub right_pressed: bool,
 }
 
 /// Turns host frames into per-step `Buttons`.
@@ -54,6 +58,10 @@ pub struct InputTracker {
     pending_jump: bool,
     pending_dash: bool,
     pending_start: bool,
+    pending_up: bool,
+    pending_down: bool,
+    pending_left: bool,
+    pending_right: bool,
 }
 
 impl InputTracker {
@@ -61,7 +69,16 @@ impl InputTracker {
         self.pending_jump |= input.jump && !self.last.jump;
         self.pending_dash |= input.dash && !self.last.dash;
         self.pending_start |= input.start && !self.last.start;
+        self.pending_up |= input.up && !self.last.up;
+        self.pending_down |= input.down && !self.last.down;
+        self.pending_left |= input.left && !self.last.left;
+        self.pending_right |= input.right && !self.last.right;
         self.last = input;
+    }
+
+    /// Start from buttons already held (no press edge until released).
+    pub fn prime(&mut self, held: InputState) {
+        self.last = held;
     }
 
     pub fn consume(&mut self) -> Buttons {
@@ -70,10 +87,18 @@ impl InputTracker {
             jump_pressed: self.pending_jump,
             dash_pressed: self.pending_dash,
             start_pressed: self.pending_start,
+            up_pressed: self.pending_up,
+            down_pressed: self.pending_down,
+            left_pressed: self.pending_left,
+            right_pressed: self.pending_right,
         };
         self.pending_jump = false;
         self.pending_dash = false;
         self.pending_start = false;
+        self.pending_up = false;
+        self.pending_down = false;
+        self.pending_left = false;
+        self.pending_right = false;
         b
     }
 }

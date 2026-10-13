@@ -20,3 +20,8 @@ libxm = "1"
 [profile.release]
 opt-level = "s"
 lto = true
+
+# Level generation tests play thousands of bot runs; optimise the test build
+# (debug assertions stay on).
+[profile.test]
+opt-level = 2

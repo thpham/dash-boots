@@ -16,6 +16,10 @@ pub fn draw(g: &Game, r: &mut RenderList) {
         r.rect(0.0, 0.0, vw, vh, [0.0, 0.0, 0.05, 0.55]);
         r.text_centered(vh * 0.5 - 12.0, "PAUSED", WHITE, 2.0);
         r.text_centered(vh * 0.5 + 10.0, "PRESS ENTER TO RESUME", CYAN, 1.0);
+        if let Some(h) = &g.run_hud {
+            r.text_centered(vh * 0.5 + 26.0, &format!("SEED {}  START D{}", h.seed, h.start), WHITE, 1.0);
+            r.text_centered(vh * 0.5 + 38.0, "T: QUIT TO TITLE", CYAN, 1.0);
+        }
     }
 }
 
@@ -27,6 +31,9 @@ fn format_time(t: f32) -> String {
 fn draw_hud(g: &Game, r: &mut RenderList) {
     let coins = format!("$ {:02}/{:02}", g.coins_collected, g.coins_total);
     r.text_shadow(6.0, 6.0, &coins, WHITE, 1.0);
+    if let Some(h) = &g.run_hud {
+        r.text_shadow(6.0, 18.0, &format!("RUN {} D{}", h.n + 1, h.difficulty), CYAN, 1.0);
+    }
     if g.player.dash_boots {
         r.text_shadow(6.0 + RenderList::text_width(&coins, 1.0) + 6.0, 6.0, "^", WHITE, 1.0);
     }
@@ -43,8 +50,17 @@ fn draw_title(g: &Game, r: &mut RenderList) {
     r.rect(0.0, 0.0, vw, vh, [0.02, 0.0, 0.08, 0.35]);
     r.text_centered(26.0, "DASH BOOTS", YELLOW, 3.0);
     r.text_centered(54.0, "A 16-BIT PLATFORM ADVENTURE", CYAN, 1.0);
-    if (g.frame / 30).is_multiple_of(2) {
-        r.text_centered(84.0, "PRESS ENTER OR SPACE", WHITE, 1.0);
+    use crate::game::MenuItem;
+    for (i, item) in g.menu.items().iter().enumerate() {
+        let label = match item {
+            MenuItem::Campaign => "CAMPAIGN".to_string(),
+            MenuItem::Endless => format!("ENDLESS  < D{} >", g.menu.difficulty),
+            MenuItem::Continue => format!("CONTINUE RUN {}", g.menu.saved_run.unwrap_or(0) + 1),
+        };
+        let selected = *item == g.menu.selected;
+        let text = if selected { format!("> {label}") } else { format!("  {label}") };
+        let x = ((r.view_w - RenderList::text_width("  ENDLESS  < D5 >", 1.0)) * 0.5).round();
+        r.text_shadow(x, 66.0 + i as f32 * 10.0, &text, if selected { YELLOW } else { WHITE }, 1.0);
     }
     let panel_y = 100.0;
     r.rect(24.0, panel_y - 4.0, vw - 48.0, 78.0, [0.0, 0.0, 0.0, 0.45]);
@@ -70,6 +86,28 @@ fn draw_clear(g: &Game, r: &mut RenderList) {
         return;
     }
     let top = (vh - 96.0) * 0.5;
+    if let Some(h) = &g.run_hud {
+        r.text_centered(top + 8.0, "COURSE CLEAR!", YELLOW, 2.0);
+        r.text_centered(
+            top + 30.0,
+            &format!("COINS   {:02}/{:02}", g.coins_collected, g.coins_total),
+            WHITE,
+            1.0,
+        );
+        r.text_centered(top + 40.0, &format!("TIME    {}", format_time(g.time)), WHITE, 1.0);
+        r.text_centered(top + 50.0, &format!("DEATHS  {:5}", g.deaths), WHITE, 1.0);
+        r.text_centered(
+            top + 62.0,
+            &format!("CLEARED {}  BEST {}", h.n + 1, h.best.max(h.n + 1)),
+            WHITE,
+            1.0,
+        );
+        r.text_centered(top + 74.0, &h.next, YELLOW, 1.0);
+        if g.phase_time > 1.2 && (g.frame / 30).is_multiple_of(2) {
+            r.text_centered(top + 84.0, "PRESS ENTER TO CONTINUE", CYAN, 1.0);
+        }
+        return;
+    }
     r.text_centered(top + 8.0, if g.last_level { "THE END!" } else { "COURSE CLEAR!" }, YELLOW, 2.0);
     r.text_centered(
         top + 34.0,

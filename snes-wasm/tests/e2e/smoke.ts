@@ -184,6 +184,31 @@ try {
   check(lumaBack > lumaFuture * 2, `the past is back (luma ${lumaFuture.toFixed(0)} -> ${lumaBack.toFixed(0)})`);
   check((await glError()) === 0, 'no WebGL error after the way back');
 
+  // ENDLESS: a shared seed reproduces the run's first level exactly.
+  const levelHashFor = async (url: string) => {
+    await page.goto(url);
+    await page.waitForSelector('#game:not([hidden])', { timeout: 10_000 });
+    await sleep(300);
+    await page.keyboard.press('Enter'); // ENDLESS is preselected by ?seed=
+    await page.waitForFunction(() => !!(window as any).__dashboots?.levelHash, null, { timeout: 10_000 });
+    await sleep(500);
+    return page.evaluate(() => (window as any).__dashboots as { levelHash: string; levelSource: string });
+  };
+  const runA = await levelHashFor(`${URL}?seed=4242&start=2`);
+  const endlessShot = await shot('20-endless');
+  check(!title.equals(endlessShot), `ENDLESS starts a generated level (${runA.levelSource})`);
+  check(/^model:\d in \d+ ms$/.test(runA.levelSource), `the embedded model wrote it (${runA.levelSource})`);
+  const runB = await levelHashFor(`${URL}?seed=4242&start=2`);
+  check(runA.levelHash === runB.levelHash, `?seed= reproduces the level (${runA.levelHash})`);
+
+  // Junk in the URL and in storage must not break the boot (Review Focus 2–3).
+  await page.evaluate(() => localStorage.setItem('dash-boots-run', '{"seed":"x"'));
+  await page.goto(`${URL}?seed=abc&start=9`);
+  await page.waitForSelector('#game:not([hidden])', { timeout: 10_000 });
+  await sleep(300);
+  check(true, 'boot survives a corrupt saved run and a junk ?seed=');
+  await page.evaluate(() => localStorage.removeItem('dash-boots-run'));
+
   check(problems.length === 0, `no console errors/warnings${problems.length ? `:\n${problems.join('\n')}` : ''}`);
   await browser.close();
   console.log(`screenshots in ${OUT}/`);
